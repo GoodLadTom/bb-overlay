@@ -1,0 +1,65 @@
+// Synced rail state (tags, "come back later" marks, section order, collapsed
+// sections) lives on the plugin server in bb storage, so it follows the member
+// across windows and machines. Every change is broadcast on "rail-state".
+import { useCallback, useEffect, useState } from "react";
+import { useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
+import { toast } from "sonner";
+import type { RailState, rpcContract } from "../server";
+
+export type { RailState };
+export type Tag = RailState["tags"][number];
+export type TagColor = Tag["color"];
+export type LaterReason = "revisit" | "done" | "mistake";
+
+export const TAG_COLORS: TagColor[] = ["gold", "ink", "green", "red", "plum", "teal", "sand"];
+
+/** Theme-token colours only, so tags follow the palette in light and dark. */
+export const TAG_CSS: Record<TagColor, string> = {
+  gold: "var(--attention)",
+  ink: "var(--foreground)",
+  green: "var(--success)",
+  red: "var(--destructive)",
+  plum: "var(--pr-merged)",
+  teal: "var(--ansi-6)",
+  sand: "var(--input)",
+};
+
+const EMPTY: RailState = { tags: [], assign: {}, later: {}, order: [], collapsed: [] };
+
+const fail = (verb: string) => (e: unknown) => {
+  toast.error(`${verb} failed`, { description: e instanceof Error ? e.message : String(e) });
+};
+
+export function useRailState() {
+  const rpc = useRpc<typeof rpcContract>();
+  const [state, setState] = useState<RailState>(EMPTY);
+
+  const refetch = useCallback(() => {
+    rpc.call("state_get").then(setState, () => undefined);
+  }, [rpc]);
+  useEffect(refetch, [refetch]);
+  useRealtime("rail-state", refetch);
+
+  const apply = (p: Promise<RailState>, verb: string) => p.then(setState, fail(verb));
+
+  return {
+    state,
+    createTag: (name: string, color: TagColor) =>
+      rpc.call("tag_create", { name, color }).then((tag) => {
+        refetch();
+        return tag;
+      }),
+    updateTag: (id: string, patch: { name?: string; color?: TagColor }) => apply(rpc.call("tag_update", { id, ...patch }), "Update tag"),
+    deleteTag: (id: string) => apply(rpc.call("tag_delete", { id }), "Delete tag"),
+    applyTag: (threadIds: string[], tagId: string, on: boolean) => apply(rpc.call("tag_apply", { threadIds, tagId, on }), "Tag"),
+    setLater: (threadIds: string[], reason: LaterReason | null) => apply(rpc.call("later_set", { threadIds, reason }), "Come back later"),
+    setOrder: (order: string[]) => apply(rpc.call("order_set", { order }), "Reorder"),
+    setCollapsed: (id: string, collapsed: boolean) => {
+      setState((s) => ({ ...s, collapsed: collapsed ? [...new Set([...s.collapsed, id])] : s.collapsed.filter((x) => x !== id) }));
+      void apply(rpc.call("collapsed_set", { id, collapsed }), "Collapse");
+    },
+    forget: (threadIds: string[]) => apply(rpc.call("forget_threads", { threadIds }), "Tidy up"),
+  };
+}
+
+export type RailOps = ReturnType<typeof useRailState>;

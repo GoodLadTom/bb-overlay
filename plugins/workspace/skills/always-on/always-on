@@ -1,0 +1,310 @@
+#!/bin/bash
+# always-on: hand work to your always-on machine (a home Mac, mini PC or VPS running
+# its own bb) and, if you have storage at home, move files between it and this laptop.
+#
+# Settings come from ~/.config/navaigate-workspace/profile.json (written by
+# "Set up workspace" in NavAIgate Workspace):
+#   machine.sshHost   SSH host or alias of the always-on machine (required)
+#   storage.*         optional: share path, local copy folder, home-network check, projects
+#
+#   always-on where                      home (storage on the local network) or away
+#   always-on status                     machine reachable? bb, logins, storage
+#   always-on url [THREAD]               web address of the machine's bb (laptop or phone)
+#   always-on send [opts] (-p TEXT | -f FILE | stdin)
+#        --project NAME                  bb project on the machine (default: storage home project, else personal)
+#        --provider ID                   claude-code (default) | codex | acp-cursor | pi
+#        --model ID  --title TEXT
+#        --folder PATH                   run inside this folder on the machine
+#   always-on list                       recent threads on the machine
+#   always-on show THREAD                status + final output
+#   always-on tell THREAD (-p TEXT | -f FILE)
+#   always-on pull THREAD                fetch the files a finished thread listed under OUTPUTS:
+#   always-on fetch PATH...              storage file/folder -> local copy (storage only)
+#   always-on push LOCAL_PATH...         edited local copy -> storage (refuses if it changed meanwhile)
+#   always-on put FILE... [--to DIR]     laptop file -> storage or the machine, so a job can use it
+#   always-on clean [--days N] [--yes]   drop local copies unchanged since fetch and unused for N days
+set -euo pipefail
+
+CONF_DIR="$HOME/.config/navaigate-workspace"
+PROFILE="$CONF_DIR/profile.json"
+HANDOFFS="$CONF_DIR/handoffs.json"
+
+die() { echo "always-on: $*" >&2; exit 1; }
+
+[ -f "$PROFILE" ] || die "no settings yet. Open NavAIgate Workspace in bb and run Set up workspace."
+cfg() {  # cfg <dotted.key> -> value or empty
+  KEY="$1" python3 -c '
+import json, os
+d = json.load(open(os.path.expanduser("~/.config/navaigate-workspace/profile.json")))
+for k in os.environ["KEY"].split("."):
+    d = d.get(k) if isinstance(d, dict) else None
+print("" if d is None else d)'
+}
+
+HOST="${ALWAYS_ON_HOST:-$(cfg machine.sshHost)}"
+LABEL="$(cfg machine.label)"; LABEL="${LABEL:-always-on machine}"
+STORAGE="$(cfg storage.path)"
+LOCAL="$(cfg storage.localCopy)"; LOCAL="${LOCAL/#\~/$HOME}"
+HOMECHECK="$(cfg storage.homeCheck)"
+HOME_PROJECT="$(cfg storage.homeProject)"
+RESULTS="$HOME/AlwaysOn_Results"
+MANIFEST="${LOCAL:-$RESULTS}/.always-on-manifest.tsv"   # rel_path <TAB> sha256 <TAB> fetched_epoch
+
+need_host() { [ -n "$HOST" ] || die "no always-on machine set. Add one in Set up workspace."; }
+need_storage() { [ -n "$STORAGE" ] && [ -n "$LOCAL" ] || die "no storage at home set up. Add it in Set up workspace."; }
+
+SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=15 "$HOST")
+# bb on PATH (Linux, or a Mac with the CLI linked), else the macOS app's bundled CLI.
+REMOTE_ENV='export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" >/dev/null; BB="$(command -v bb || echo /Applications/bb.app/Contents/Resources/app.asar.unpacked/node_modules/bb-app/host-daemon/dist/bb)";'
+remote() { need_host; "${SSH[@]}" "$REMOTE_ENV $1" || die "could not reach the $LABEL ($HOST) over SSH, or the command failed there"; }
+
+# Any storage-ish path -> path relative to the share root.
+rel() {
+  local p="$1"
+  p="${p/#\~/$HOME}"
+  case "$p" in
+    "$STORAGE"/*)  p="${p#$STORAGE/}" ;;
+    "$LOCAL"/*)    p="${p#$LOCAL/}" ;;
+    /*)            die "not a path on your storage ($STORAGE): $1" ;;
+  esac
+  printf '%s' "${p%/}"
+}
+
+sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
+
+record() {  # record every file under LOCAL/<rel> in the manifest
+  local r="$1" now; now=$(date +%s); mkdir -p "$LOCAL"; touch "$MANIFEST"
+  local tmp; tmp=$(mktemp)
+  (cd "$LOCAL" && find "$r" -type f ! -name .DS_Store -print0) | while IFS= read -r -d '' f; do
+    printf '%s\t%s\t%s\n' "$f" "$(sha "$LOCAL/$f")" "$now"
+  done > "$tmp"
+  cut -f1 "$tmp" | sort > "$tmp.keys"
+  awk -F'\t' 'NR==FNR{k[$0]=1; next} !($1 in k)' "$tmp.keys" "$MANIFEST" > "$tmp.old" || true
+  cat "$tmp.old" "$tmp" > "$MANIFEST"; rm -f "$tmp" "$tmp.keys" "$tmp.old"
+}
+
+cmd_where() {
+  # home = the home-network check answers quickly; away = it doesn't
+  if [ -z "$STORAGE" ] || [ -z "$HOMECHECK" ]; then echo "home"; return; fi
+  local h="${HOMECHECK%:*}" port="${HOMECHECK##*:}"
+  [ "$port" = "$HOMECHECK" ] && port=445
+  if nc -z -G 1 "$h" "$port" >/dev/null 2>&1 || nc -z -w 1 "$h" "$port" >/dev/null 2>&1; then echo "home"; else echo "away"; fi
+}
+
+cmd_status() {
+  remote '
+    echo "host:    $(hostname) ($(whoami)), up $(uptime | sed -E "s/.*up ([^,]+),.*/\1/")"
+    $BB settings show --json >/dev/null 2>&1 && echo "bb:      running $($BB --version)" || echo "bb:      NOT RUNNING"
+    echo "url:     $($BB connect status --json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get(\"url\") or \"not connected\")" 2>/dev/null)"
+    command -v claude >/dev/null && { claude auth status >/dev/null 2>&1 && echo "claude:  logged in" || echo "claude:  NOT logged in"; }
+    command -v codex >/dev/null && { codex login status >/dev/null 2>&1 && echo "codex:   logged in" || echo "codex:   NOT logged in"; }
+    command -v cursor-agent >/dev/null && { cursor-agent status 2>/dev/null | grep -q "Logged in" && echo "cursor:  logged in" || echo "cursor:  NOT logged in"; }
+    true'
+  if [ -n "$STORAGE" ]; then
+    if "${SSH[@]}" "ls $(printf %q "$STORAGE")/ >/dev/null 2>&1"; then echo "storage: readable at $STORAGE"
+    else echo "storage: NOT readable at $STORAGE over SSH (mount it; on a Mac give /usr/sbin/sshd Full Disk Access)"; fi
+  fi
+}
+
+cmd_url() {
+  local raw; raw=$(remote '$BB connect status --json')
+  local u; u=$(printf '%s' "$raw" | python3 -c "import json,sys; print(json.load(sys.stdin).get('url') or '')")
+  [ -n "$u" ] || die "the $LABEL's bb is not connected to getbb.app (run: bb connect on it)"
+  if [ -n "${1:-}" ]; then echo "$u/threads/$1"; else echo "$u"; fi
+}
+
+project_id() {  # name -> "<id> <folder>" on the machine
+  local raw; raw=$(remote '$BB project list --json') || exit 1
+  printf '%s' "$raw" | NAME="$1" python3 -c '
+import json, os, sys
+d = json.load(sys.stdin); d = d if isinstance(d, list) else d.get("projects", [])
+name = os.environ["NAME"].lower()
+for p in d:
+    if (p.get("name") or "").lower() == name:
+        src = next((s.get("path") for s in p.get("sources", []) if s.get("isDefault")), "") or ""
+        print(p["id"], src); break'
+}
+
+cmd_send() {
+  local project="$HOME_PROJECT" provider="claude-code" model="" title="" text="" file="" workdir=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --project) project="$2"; shift 2;;
+      --provider) provider="$2"; shift 2;;
+      --model) model="$2"; shift 2;;
+      --title) title="$2"; shift 2;;
+      --folder) workdir="$2"; shift 2;;
+      -p|--prompt) text="$2"; shift 2;;
+      -f|--prompt-file) file="$2"; shift 2;;
+      *) die "send: unknown option $1";;
+    esac
+  done
+  need_host
+  if [ -n "$file" ]; then text="$(cat "$file")"; elif [ -z "$text" ]; then text="$(cat)"; fi
+  [ -n "$text" ] || die "send: empty prompt"
+  local pid="" folder=""
+  if [ -n "$project" ]; then
+    local found; found=$(project_id "$project") || exit 1; pid="${found%% *}"; folder="${found#* }"
+    [ -n "$pid" ] || echo "always-on: no bb project called $project on the $LABEL; using the personal workspace" >&2
+  fi
+  if [ -z "$pid" ]; then pid=proj_personal; project=personal; folder=""; fi
+  local rhome; rhome=$("${SSH[@]}" 'printf %s "$HOME"' 2>/dev/null) || die "could not reach the $LABEL ($HOST) over SSH"
+  # The machine's home folder differs from this laptop's; storage paths are the same.
+  text="${text//$HOME\//$rhome/}"
+  local save_rule="- Save every deliverable in the machine's workspace and list it under OUTPUTS."
+  [ -n "$STORAGE" ] && save_rule="- Your storage is mounted at $STORAGE. Read and write it directly, and save every deliverable there in the folder it belongs in."
+  # Built with printf: bash 3.2 mis-parses apostrophes in a heredoc inside $(...)
+  local brief
+  brief=$(printf '%s\n' \
+    "[Sent from the laptop with the always-on skill. You are running on the $LABEL.]" \
+    "$save_rule" \
+    "- The person who sent this may be on a slow connection. Keep the final reply short." \
+    "- End the final reply with a line \"OUTPUTS:\" followed by the full path of each file you created or changed, one per line." \
+    "" \
+    "$text")
+  # Cursor indexes its whole workspace on start, which never finishes on a big share:
+  # give it the personal workspace (or --folder) and absolute paths instead.
+  if [ -n "$workdir" ]; then
+    if [ -n "$STORAGE" ] && [[ "$workdir" != /* || "$workdir" == "$STORAGE"/* || "$workdir" == "$LOCAL"/* ]]; then folder="$STORAGE/$(rel "$workdir")"; else folder="$workdir"; fi
+  elif [ "$provider" = acp-cursor ] && [ -n "$STORAGE" ] && [ "$folder" = "$STORAGE" ]; then pid=proj_personal; folder=""; project=personal; fi
+  local args="--project $pid --provider $provider --permission-mode full --json --prompt-file -"
+  [ -n "$folder" ] && args="$args --environment $(printf %q "$folder")"
+  [ -n "$model" ] && args="$args --model $(printf %q "$model")"
+  [ -n "$title" ] && args="$args --title $(printf %q "$title")"
+  local out; out=$(printf '%s' "$brief" | remote "\$BB thread spawn $args")
+  local id; id=$(printf '%s' "$out" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id') or d.get('thread',{}).get('id',''))" 2>/dev/null || true)
+  [ -n "$id" ] || die "send failed: $out"
+  local url; url=$(cmd_url "$id" 2>/dev/null || true)
+  echo "sent: $id ($provider, project $project)"
+  echo "watch: ${url:-always-on show $id}"
+  # Inside a bb thread on the laptop: remember which chat went where, so the sidebar
+  # can show a cloud on that row (NavAIgate Workspace reads handoffs.json).
+  if [ -n "${BB_THREAD_ID:-}" ]; then
+    mkdir -p "$CONF_DIR"
+    LOCAL_ID="$BB_THREAD_ID" REMOTE_ID="$id" URL="$url" TITLE="$title" PROVIDER="$provider" FILE="$HANDOFFS" python3 -c '
+import json, os, time
+p = os.environ["FILE"]
+try: d = json.load(open(p))
+except Exception: d = {}
+d[os.environ["LOCAL_ID"]] = {"remoteThread": os.environ["REMOTE_ID"], "url": os.environ["URL"], "title": os.environ["TITLE"],
+                             "provider": os.environ["PROVIDER"], "sentAt": int(time.time() * 1000)}
+tmp = p + ".tmp"; json.dump(d, open(tmp, "w"), indent=1); os.replace(tmp, p)'
+  fi
+}
+
+cmd_list() {
+  local py='import json, sys, datetime
+t = json.load(sys.stdin); t = t if isinstance(t, list) else t.get("threads", [])
+t.sort(key=lambda x: x.get("updatedAt") or 0, reverse=True)
+for x in t[:15]:
+    u = x.get("updatedAt")
+    u = datetime.datetime.fromtimestamp(u / 1000).strftime("%d %b %H:%M") if isinstance(u, (int, float)) else ""
+    print("%s  %s  %-12s %s" % (u, x["id"], x.get("providerId") or "", (x.get("title") or "")[:70]))'
+  local raw; raw=$(remote '$BB thread list --json') || exit 1
+  printf '%s' "$raw" | python3 -c "$py"
+}
+
+cmd_show() { [ -n "${1:-}" ] || die "show THREAD"; remote "\$BB thread show $1; echo; \$BB thread output $1 2>/dev/null | tail -40"; }
+
+cmd_tell() {
+  local id="${1:-}"; shift || true; [ -n "$id" ] || die "tell THREAD (-p TEXT | -f FILE)"
+  local text=""
+  case "${1:-}" in -p) text="$2";; -f) text="$(cat "$2")";; *) text="$(cat)";; esac
+  printf '%s' "$text" | remote "\$BB thread tell $id --message-file -"
+}
+
+cmd_fetch() {
+  need_storage; need_host
+  [ $# -gt 0 ] || die "fetch PATH..."
+  mkdir -p "$LOCAL"
+  for p in "$@"; do
+    local r; r=$(rel "$p")
+    local t0; t0=$(date +%s)
+    printf '%s\n' "$r" | "${SSH[@]}" "cd $(printf %q "$STORAGE") && tar -cf - -T -" | tar -C "$LOCAL" -xf -
+    record "$r"
+    echo "fetched: $LOCAL/$r ($(du -sh "$LOCAL/$r" | cut -f1), $(( $(date +%s) - t0 ))s)"
+  done
+}
+
+cmd_pull() {
+  [ -n "${1:-}" ] || die "pull THREAD"
+  local paths; paths=$(remote "\$BB thread output $1" | awk '/OUTPUTS:/{f=1; sub(/.*OUTPUTS:[ \t]*/, ""); if (length($0)) print; next} f && NF{print}' | sed -E 's/^[-* ]*//' | tr -d '\140' | grep -E '^(/|~/)' || true)
+  [ -n "$paths" ] || die "no OUTPUTS: list in that thread's final reply yet (still running? try: always-on show $1)"
+  local IFS=$'\n'
+  if [ -n "$STORAGE" ]; then
+    local on_storage; on_storage=$(printf '%s\n' $paths | grep -F "$STORAGE/" || true)
+    [ -n "$on_storage" ] && cmd_fetch $on_storage
+    paths=$(printf '%s\n' $paths | grep -vF "$STORAGE/" || true)
+  fi
+  # Anything else lives only on the machine: copy it into ~/AlwaysOn_Results/<thread>/.
+  for p in $paths; do
+    [ -n "$p" ] || continue
+    local dest="$RESULTS/$1"; mkdir -p "$dest"
+    "${SSH[@]}" "cd $(printf %q "$(dirname "$p")") && tar -cf - $(printf %q "$(basename "$p")")" | tar -C "$dest" -xf - && echo "pulled: $dest/$(basename "$p")"
+  done
+}
+
+cmd_push() {
+  need_storage; need_host
+  [ $# -gt 0 ] || die "push LOCAL_PATH..."
+  for p in "$@"; do
+    local r; r=$(rel "$p"); [ -e "$LOCAL/$r" ] || die "no local copy at $LOCAL/$r"
+    local files; files=$(cd "$LOCAL" && find "$r" -type f ! -name .DS_Store)
+    local remote_sums
+    remote_sums=$(printf '%s\n' "$files" | "${SSH[@]}" "cd $(printf %q "$STORAGE") && tr '\\n' '\\0' | xargs -0 shasum -a 256 2>/dev/null" || true)
+    local clash=""
+    while read -r s f; do
+      [ -n "$f" ] || continue
+      local was; was=$(awk -F'\t' -v k="$f" '$1==k{print $2}' "$MANIFEST" 2>/dev/null | tail -1)
+      if [ -n "$was" ] && [ "$was" != "$s" ]; then clash="$clash $f"; fi
+    done <<< "$remote_sums"
+    if [ -n "$clash" ] && [ "${ALWAYS_ON_FORCE:-0}" != 1 ]; then
+      die "the stored copy changed since you fetched it:$clash. Fetch it again, or rerun with ALWAYS_ON_FORCE=1 to overwrite."
+    fi
+    printf '%s\n' "$files" | (cd "$LOCAL" && tar -cf - -T -) | "${SSH[@]}" "cd $(printf %q "$STORAGE") && tar -xf -"
+    record "$r"
+    echo "pushed: $r"
+  done
+}
+
+cmd_put() {
+  need_host
+  local base="${STORAGE:-}"; local to="From_Laptop/$(date +%F)" files=()
+  while [ $# -gt 0 ]; do case "$1" in --to) to="$2"; shift 2;; *) files+=("$1"); shift;; esac; done
+  [ ${#files[@]} -gt 0 ] || die "put FILE... [--to DIR]"
+  local dir
+  if [ -n "$base" ]; then
+    case "$to" in /*) dir="$base/$(rel "$to")";; *) dir="$base/$to";; esac
+  else
+    local rhome; rhome=$("${SSH[@]}" 'printf %s "$HOME"' 2>/dev/null) || die "could not reach the $LABEL ($HOST) over SSH"; dir="$rhome/$to"
+  fi
+  for f in "${files[@]}"; do
+    [ -e "$f" ] || die "no such file: $f"
+    tar -C "$(dirname "$f")" -cf - "$(basename "$f")" | "${SSH[@]}" "mkdir -p $(printf %q "$dir") && tar -C $(printf %q "$dir") -xf -"
+    echo "on the $LABEL: $dir/$(basename "$f")"
+  done
+}
+
+cmd_clean() {
+  need_storage
+  local days=14 yes=0
+  while [ $# -gt 0 ]; do case "$1" in --days) days="$2"; shift 2;; --yes) yes=1; shift;; *) die "clean: unknown option $1";; esac; done
+  [ -f "$MANIFEST" ] || { echo "nothing fetched yet"; return; }
+  local cutoff=$(( $(date +%s) - days * 86400 )) n=0 kept=0
+  while IFS=$'\t' read -r f s when; do
+    local path="$LOCAL/$f"; [ -f "$path" ] || continue
+    if [ "$(sha "$path")" != "$s" ]; then echo "  changed, not pushed: $f"; kept=$((kept+1)); continue; fi
+    local used; used=$(stat -f %a "$path" 2>/dev/null || stat -c %X "$path")
+    if [ "$when" -lt "$cutoff" ] && [ "$used" -lt "$cutoff" ]; then
+      n=$((n+1)); if [ $yes = 1 ]; then rm -f "$path"; else echo "  would remove: $f"; fi
+    fi
+  done < "$MANIFEST"
+  [ $yes = 1 ] && find "$LOCAL" -type d -empty -delete 2>/dev/null || true
+  if [ $yes = 1 ]; then echo "removed $n local copies (still in storage); $kept changed files kept"
+  else echo "$n would be removed (add --yes); $kept changed files would be kept"; fi
+}
+
+case "${1:-}" in
+  where|status|url|send|list|show|tell|pull|fetch|push|put|clean) c="$1"; shift; "cmd_$c" "$@";;
+  *) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+esac

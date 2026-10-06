@@ -1,0 +1,240 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:ital,wght@1,400;1,500&display=swap");
+
+/*
+  NavAIgate — bb theme v1 (2 October 2026)
+  Lifted from the GPLS platform tokens (NavAIgate-2.0 src/styles/gpls-theme.css + tokens.css):
+  warm paper and ink, hairline rules, gold for "now". The slate-blue accent is removed:
+  no blue anywhere. Primary is ink, the focus ring and live states are gold.
+*/
+
+:root,
+.light {
+  /* Anchors: GPLS Slate light (ground / ink) */
+  --canvas: #fbfaf8;
+  --ink: #202225;
+
+  /* Accent is ink, like the platform's primary button. Gold carries focus and "now". */
+  --primary: #202225;
+  --primary-foreground: #fbfaf8;
+  --ring: #d4a354;
+  --sidebar-ring: #d4a354;
+  --surface-selected: color-mix(in oklch, #d4a354 14%, var(--canvas));
+  --surface-selected-border: color-mix(in oklch, #d4a354 45%, var(--canvas));
+
+  /* Rail sits a shade off the page, divided by a warm hairline */
+  --sidebar: #f6f4ef;
+  --sidebar-foreground: #202225;
+  --sidebar-accent: #ece9e2;
+  --sidebar-border: #dedbd1;
+  --border: #dedbd1;
+  --border-hairline: #e6e3da;
+  --border-seam: #dedbd1;
+  --input: #c4bcae;
+  --muted: #f2f0eb;
+  --secondary: #f2f0eb;
+  --accent: #f2f0eb;
+
+  /* Text tiers: quiet and faint, derived so contrast tracks the anchors */
+  --muted-foreground: color-mix(in oklch, var(--ink) 72%, var(--canvas));
+  --subtle-foreground: color-mix(in oklch, var(--ink) 60%, var(--canvas));
+  --readback-foreground: color-mix(in oklch, var(--ink) 65%, var(--canvas));
+
+  /* Semantic: warm, recognisable, no blue */
+  --destructive: #b42318;
+  --destructive-foreground: #fbfaf8;
+  --destructive-text: #b42318;
+  --warning: #d4a354;
+  --warning-text: #8a6a2c;
+  --attention: #d4a354;
+  --success: #1f7a4d;
+  --diff-added: #1f7a4d;
+  --diff-removed: #b23b2a;
+  --pr-merged: #7a5c8a;
+  --file-accent: #8a6a2c;
+
+  /* Shape and elevation from the platform design system */
+  --radius: 0.5rem;
+  --shadow-sm: 0 1px 2px rgb(24 24 27 / 0.05);
+  --shadow-md: 0 1px 2px rgb(24 24 27 / 0.05), 0 6px 20px rgb(24 24 27 / 0.06);
+  --shadow-lg: 0 12px 40px rgb(24 24 27 / 0.14);
+
+  /* Type: Plex Sans for the UI (the free near-match to the platform face), Plex Mono for code and terminal */
+  --font-sans: "IBM Plex Sans", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-terminal: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+
+  /* Spacing: the platform breathes; open the whole 4px grid by about 8 per cent */
+  --spacing: 0.27rem;
+
+  /* Terminal palette: warm, no blue (blue slots become slate-taupe and gold) */
+  --ansi-0: #202225;  --ansi-8: #6c665c;
+  --ansi-1: #b42318;  --ansi-9: #d9534a;
+  --ansi-2: #1f7a4d;  --ansi-10: #3f9a6b;
+  --ansi-3: #8a6a2c;  --ansi-11: #d4a354;
+  --ansi-4: #5c5a54;  --ansi-12: #7d776c;
+  --ansi-5: #7a5c8a;  --ansi-13: #9a7aa8;
+  --ansi-6: #4f7a6e;  --ansi-14: #6f9a8d;
+  --ansi-7: #dedbd1;  --ansi-15: #fbfaf8;
+  --ansi-bg-fg-0: #fbfaf8; --ansi-bg-fg-1: #fbfaf8; --ansi-bg-fg-2: #fbfaf8; --ansi-bg-fg-3: #fbfaf8;
+  --ansi-bg-fg-4: #fbfaf8; --ansi-bg-fg-5: #fbfaf8; --ansi-bg-fg-6: #fbfaf8; --ansi-bg-fg-7: #202225;
+  --ansi-bg-fg-8: #fbfaf8; --ansi-bg-fg-9: #202225; --ansi-bg-fg-10: #202225; --ansi-bg-fg-11: #202225;
+  --ansi-bg-fg-12: #202225; --ansi-bg-fg-13: #202225; --ansi-bg-fg-14: #202225; --ansi-bg-fg-15: #202225;
+}
+
+.dark {
+  /* Anchors: the platform's dark design system (page #111113, warm ink) */
+  --canvas: #131315;
+  --ink: #f4f2ec;
+
+  --primary: #f4f2ec;
+  --primary-foreground: #151517;
+  --ring: #d4a354;
+  --sidebar-ring: #d4a354;
+  --surface-selected: color-mix(in oklch, #d4a354 16%, var(--canvas));
+  --surface-selected-border: color-mix(in oklch, #d4a354 45%, var(--canvas));
+
+  --sidebar: #1a1a1e;
+  --sidebar-foreground: #f4f2ec;
+  --sidebar-accent: #232328;
+  --sidebar-border: #2a2a30;
+  --border: #2a2a30;
+  --border-hairline: #26262b;
+  --border-seam: #2a2a30;
+  --input: #3d3d45;
+  --muted: #232328;
+  --secondary: #1f1f23;
+  --accent: #232328;
+
+  --destructive: #f04438;
+  --destructive-foreground: #131315;
+  --destructive-text: #f0907f;
+  --warning: #d4a354;
+  --warning-text: #e0b46c;
+  --attention: #d4a354;
+  --success: #5fcf94;
+  --diff-added: #5fcf94;
+  --diff-removed: #f0907f;
+  --pr-merged: #b79ac4;
+  --file-accent: #d4a354;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.5), 0 6px 20px rgb(0 0 0 / 0.32);
+  --shadow-lg: 0 16px 48px rgb(0 0 0 / 0.6);
+
+  --ansi-0: #1a1a1e;  --ansi-8: #5c5c66;
+  --ansi-1: #f0907f;  --ansi-9: #f4a99b;
+  --ansi-2: #5fcf94;  --ansi-10: #86dcae;
+  --ansi-3: #d4a354;  --ansi-11: #e6c48a;
+  --ansi-4: #b8b2a7;  --ansi-12: #d6d0c2;
+  --ansi-5: #b79ac4;  --ansi-13: #cfb8d9;
+  --ansi-6: #8fbfb0;  --ansi-14: #b1d6ca;
+  --ansi-7: #d4d4d8;  --ansi-15: #f4f2ec;
+  --ansi-bg-fg-0: #f4f2ec; --ansi-bg-fg-8: #f4f2ec;
+  --ansi-bg-fg-1: #131315; --ansi-bg-fg-2: #131315; --ansi-bg-fg-3: #131315; --ansi-bg-fg-4: #131315;
+  --ansi-bg-fg-5: #131315; --ansi-bg-fg-6: #131315; --ansi-bg-fg-7: #131315; --ansi-bg-fg-9: #131315;
+  --ansi-bg-fg-10: #131315; --ansi-bg-fg-11: #131315; --ansi-bg-fg-12: #131315; --ansi-bg-fg-13: #131315;
+  --ansi-bg-fg-14: #131315; --ansi-bg-fg-15: #131315;
+}
+
+/* Platform type detail: tabular figures and slightly calmer leading for reading */
+body {
+  font-feature-settings: "tnum" 1, "ss02" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------------
+   Micro-interactions on bb's own controls (theme-level, no behaviour change).
+   After React Bits' JellyRadio, VoicePill and the general springy-press feel.
+   ------------------------------------------------------------------------ */
+
+/* Jelly radio: the Reasoning effort picker in the model menu */
+[role="radiogroup"][aria-label="Reasoning"] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 1px;
+  padding: 2px;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: var(--muted);
+}
+[role="radiogroup"][aria-label="Reasoning"] [role="radio"] {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  border-radius: 999px;
+  transition: color 160ms ease, background-color 160ms ease, transform 220ms cubic-bezier(.34, 1.56, .64, 1);
+}
+[role="radiogroup"][aria-label="Reasoning"] [role="radio"]:hover { color: var(--foreground); }
+[role="radiogroup"][aria-label="Reasoning"] [role="radio"]:active { transform: scale(.9, .94); }
+[role="radiogroup"][aria-label="Reasoning"] [role="radio"][aria-checked="true"] {
+  background: var(--foreground);
+  color: var(--background);
+  font-weight: 600;
+  animation: nav-jelly 520ms cubic-bezier(.34, 1.56, .64, 1);
+}
+@keyframes nav-jelly {
+  0% { transform: scale(.82, .82); }
+  32% { transform: scale(1.14, .88); }
+  56% { transform: scale(.94, 1.07); }
+  78% { transform: scale(1.03, .98); }
+  100% { transform: scale(1, 1); }
+}
+
+/* Voice pill: the mic idles as a quiet round button and, while listening,
+   stretches into a gold pill with three bouncing bars. */
+button[aria-label="Start voice input"] {
+  border-radius: 999px;
+  transition: transform 200ms cubic-bezier(.34, 1.56, .64, 1), background-color 160ms ease;
+}
+button[aria-label="Start voice input"]:hover { background: var(--accent); }
+button[aria-label*="voice input"]:not([aria-label="Start voice input"]),
+button[aria-label*="voice"][aria-pressed="true"] {
+  position: relative;
+  min-width: 64px;
+  border-radius: 999px;
+  background: var(--attention) !important;
+  color: #202225 !important;
+  animation: nav-pill-in 360ms cubic-bezier(.34, 1.56, .64, 1);
+}
+button[aria-label*="voice input"]:not([aria-label="Start voice input"])::after,
+button[aria-label*="voice"][aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 14px;
+  height: 12px;
+  margin-top: -6px;
+  background:
+    linear-gradient(#202225, #202225) 0 50% / 2px 40% no-repeat,
+    linear-gradient(#202225, #202225) 6px 50% / 2px 90% no-repeat,
+    linear-gradient(#202225, #202225) 12px 50% / 2px 55% no-repeat;
+  animation: nav-bars 900ms ease-in-out infinite;
+}
+@keyframes nav-pill-in { 0% { transform: scale(.8); } 60% { transform: scale(1.08, .94); } 100% { transform: scale(1); } }
+@keyframes nav-bars {
+  0%, 100% { background-size: 2px 40%, 2px 90%, 2px 55%; }
+  33% { background-size: 2px 90%, 2px 45%, 2px 80%; }
+  66% { background-size: 2px 60%, 2px 70%, 2px 35%; }
+}
+
+/* Springy press on composer and footer buttons */
+[data-follow-up-composer-footer] button,
+button[data-promptbox-submit-action],
+button[aria-label^="Provider, model"] {
+  transition: transform 200ms cubic-bezier(.34, 1.56, .64, 1);
+}
+[data-follow-up-composer-footer] button:active,
+button[data-promptbox-submit-action]:active,
+button[aria-label^="Provider, model"]:active,
+button[aria-label="Start voice input"]:active { transform: scale(.92); }
+
+@media (prefers-reduced-motion: reduce) {
+  [role="radiogroup"][aria-label="Reasoning"] [role="radio"][aria-checked="true"],
+  button[aria-label*="voice"]::after,
+  button[aria-label*="voice input"] { animation: none !important; }
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://getbb.app/schemas/plugins.schema.json",
+  "schemaVersion": 1,
+  "name": "bb-overlay",
+  "plugins": [
+    { "name": "workspace", "source": "./plugins/workspace" },
+    { "name": "kanban", "source": "./plugins/kanban" }
+  ]
+}
