@@ -179,11 +179,19 @@ export default async function plugin(bb: BbPluginApi) {
   const where = createWhere();
   const ok = { ok: true };
 
+  /** A service stops at once on reload, even while its current pass waits on the network. */
+  const orAbort = (work: Promise<unknown>, signal: AbortSignal) =>
+    new Promise<void>((resolve) => {
+      signal.addEventListener("abort", () => resolve(), { once: true });
+      work.then(() => resolve(), () => resolve());
+    });
+
   // Real-signal pass every 20s: chats starting or finishing move their tasks.
   bb.background.service("todo-sync", {
     async start(signal) {
       while (!signal.aborted) {
-        await todo.sync().catch((e) => bb.log.warn(`todo sync: ${String(e)}`));
+        await orAbort(todo.sync().catch((e) => bb.log.warn(`todo sync: ${String(e)}`)), signal);
+        if (signal.aborted) break;
         await new Promise((r) => {
           const t = setTimeout(r, 20_000);
           signal.addEventListener("abort", () => { clearTimeout(t); r(null); }, { once: true });
@@ -196,7 +204,8 @@ export default async function plugin(bb: BbPluginApi) {
   bb.background.service("usage-history", {
     async start(signal) {
       while (!signal.aborted) {
-        await home.accounts().catch((e) => bb.log.warn(`usage history: ${String(e)}`));
+        await orAbort(home.accounts().catch((e) => bb.log.warn(`usage history: ${String(e)}`)), signal);
+        if (signal.aborted) break;
         await new Promise((r) => {
           const t = setTimeout(r, 30 * 60_000);
           signal.addEventListener("abort", () => { clearTimeout(t); r(null); }, { once: true });
@@ -209,7 +218,8 @@ export default async function plugin(bb: BbPluginApi) {
   bb.background.service("audience-snapshot", {
     async start(signal) {
       while (!signal.aborted) {
-        await audience.audience().catch((e) => bb.log.warn(`audience: ${String(e)}`));
+        await orAbort(audience.audience().catch((e) => bb.log.warn(`audience: ${String(e)}`)), signal);
+        if (signal.aborted) break;
         await new Promise((r) => {
           const t = setTimeout(r, 6 * 60 * 60_000);
           signal.addEventListener("abort", () => { clearTimeout(t); r(null); }, { once: true });

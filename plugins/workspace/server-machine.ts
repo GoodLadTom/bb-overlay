@@ -58,17 +58,18 @@ function readHandoffs(): Record<string, Handoff> {
   }
 }
 
-function ssh(cmd: string, timeout = 25_000): Promise<{ ok: boolean; stdout: string }> {
+function ssh(cmd: string, timeout = 25_000, signal?: AbortSignal): Promise<{ ok: boolean; stdout: string }> {
   return new Promise((resolve) => {
     if (!host()) return resolve({ ok: false, stdout: "" });
-    execFile("/usr/bin/ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host(), REMOTE_ENV + cmd], { timeout, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) =>
+    // The signal kills ssh when the plugin reloads, so the status service stops at once.
+    execFile("/usr/bin/ssh", ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host(), REMOTE_ENV + cmd], { timeout, maxBuffer: 8 * 1024 * 1024, signal }, (err, stdout) =>
       resolve({ ok: !err, stdout: stdout ?? "" }),
     );
   });
 }
 
-async function remoteThreads(): Promise<Map<string, { status: string; updatedAt: number | null }> | null> {
-  const r = await ssh("$BB thread list --json");
+async function remoteThreads(signal?: AbortSignal): Promise<Map<string, { status: string; updatedAt: number | null }> | null> {
+  const r = await ssh("$BB thread list --json", 25_000, signal);
   if (!r.ok) return null;
   try {
     const d = JSON.parse(r.stdout) as Array<{ id: string; status?: string; updatedAt?: number }> | { threads?: Array<{ id: string; status?: string; updatedAt?: number }> };
@@ -222,10 +223,11 @@ export function createMachine(bb: BbPluginApi) {
   let state: MachineState = { configured: false, label: "", reachable: null, items: {} };
   let last = "";
 
-  const refresh = async () => {
+  const refresh = async (signal?: AbortSignal) => {
     const handoffs = readHandoffs();
     const configured = !!host();
-    const remote = configured && Object.keys(handoffs).length ? await remoteThreads() : null;
+    const remote = configured && Object.keys(handoffs).length ? await remoteThreads(signal) : null;
+    if (signal?.aborted) return state;
     const items: MachineState["items"] = {};
     for (const [local, h] of Object.entries(handoffs)) {
       const r = remote?.get(h.remoteThread);
@@ -245,7 +247,7 @@ export function createMachine(bb: BbPluginApi) {
   try {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
     watcher = fs.watch(CONFIG_DIR, (_e, name) => {
-      if (name === path.basename(FILE) || name === "profile.json") void refresh();
+      if (name === path.basename(FILE) || name === "profile.json") void refresh().catch(() => undefined);
     });
   } catch (e) {
     bb.log.warn(`always-on: cannot watch ${CONFIG_DIR}: ${String(e)}`);
@@ -255,7 +257,8 @@ export function createMachine(bb: BbPluginApi) {
   bb.background.service("machine-status", {
     async start(signal) {
       while (!signal.aborted) {
-        await refresh().catch((e) => bb.log.warn(`always-on status: ${String(e)}`));
+        await refresh(signal).catch((e) => bb.log.warn(`always-on status: ${String(e)}`));
+        if (signal.aborted) break;
         await new Promise((r) => {
           const t = setTimeout(r, POLL_MS);
           signal.addEventListener("abort", () => { clearTimeout(t); r(null); }, { once: true });
