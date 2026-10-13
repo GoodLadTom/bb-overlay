@@ -9,8 +9,11 @@ import { z } from "zod";
 
 const PF = "project-folders";
 
-/** The one line that installs project-folders (VKirill, MIT) from its own repository. */
-export const PROJECT_FOLDERS_INSTALL = "bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0";
+/**
+ * The one line that installs project-folders (VKirill, MIT) from its own repository.
+ * Pinned to 0.6.19: from 0.6.20 on it needs functions only VKirill's own bb build has.
+ */
+export const PROJECT_FOLDERS_INSTALL = "bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@v0.6.19";
 
 const folderSchema = z
   .object({

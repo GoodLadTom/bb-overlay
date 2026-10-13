@@ -26,7 +26,16 @@ REPO_URL="https://github.com/skyremote/bb-overlay.git"
 REPO_REF="main"
 MIN_BB="0.45"
 
+# Either NavAIgate edition counts as ours: the public BB Overlay and the
+# members' edition ship the same plugins, so a copy from the other one is
+# updated where it is, not kept as it was.
+NAV_MATCH="github.com/skyremote/bb-overlay|github.com/skyremote/navaigate-workspace"
+
 PF_SOURCE="git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0"
+# From 0.6.20 on, Projects & Sections needs functions only VKirill's own bb
+# build has, so on standard bb no recent release installs. 0.6.19 is the last
+# release that runs on standard bb. It is pinned, so it stays on 0.6.19.
+PF_FALLBACK="git:https://github.com/VKirill/bb-plugin-project-folders.git@v0.6.19"
 PF_MATCH="github.com/VKirill/bb-plugin-project-folders"
 AB_SOURCE="git:https://github.com/aaronphifer/bb-plugin-agent-board.git@semver:^0.6.1"
 AB_MATCH="github.com/aaronphifer/bb-plugin-agent-board"
@@ -113,15 +122,26 @@ plugin_source() {
     cur == id && $1 == "source:" { sub(/^ *source: */, ""); print; exit }'
 }
 
-# ensure <id> <label> <match-in-source> <install args...>
+# src_matches <source> <a|b|...> -> true when the source contains any of them
+src_matches() {
+  local src="$1" m IFS='|'
+  for m in $2; do [[ "$src" == *"$m"* ]] && return 0; done
+  return 1
+}
+
+# [FALLBACK=<source>] ensure <id> <label> <match-in-source> <install args...>
+# FALLBACK is tried when the install fails, and a copy already on it is left be.
 ensure() {
   local id="$1" label="$2" match="$3"; shift 3
-  local line src status
+  local line src status fallback="${FALLBACK:-}"
   line="$(plugin_line "$id")"
   if [ -z "$line" ]; then
     say "$label: not installed, installing."
     if run bb plugin install "$@" --yes; then
       CHANGED+=("$id"); OUTCOME+=("$W_INST $label")
+    elif [ -n "$fallback" ] && say "$label: no recent release runs on this bb, trying ${fallback##*@}." \
+      && run bb plugin install "$fallback" --yes; then
+      CHANGED+=("$id"); OUTCOME+=("$W_INST $label (${fallback##*@}, the last release for this bb)")
     else
       OUTCOME+=("[FAILED]     $label: install failed, see above")
     fi
@@ -132,7 +152,10 @@ ensure() {
   if [[ "$src" == builtin:* ]]; then
     say "$label: installed (${line%% *}, updates with bb)."
     OUTCOME+=("[ok]         $label")
-  elif [ -n "$match" ] && [[ "$src" != *"$match"* ]]; then
+  elif [ -n "$fallback" ] && [ "$src" = "$fallback" ]; then
+    say "$label: installed (${line%% *}), pinned to the last release that runs on standard bb."
+    OUTCOME+=("[ok]         $label (${line%% *}, pinned)")
+  elif [ -n "$match" ] && ! src_matches "$src" "$match"; then
     say "$label: already installed from $src. Keeping your copy as it is."
     OUTCOME+=("[kept]       $label (your own copy: $src)")
   else
@@ -151,11 +174,11 @@ ensure() {
 
 # ---------------------------------------------------------------- plugins
 step "Installing $EDITION"
-ensure "$WS_ID" "NavAIgate Workspace" "$REPO_URL" "git:${REPO_URL}@${REPO_REF}" --plugin workspace
-ensure "kanban" "Kanban" "$REPO_URL" "git:${REPO_URL}@${REPO_REF}" --plugin kanban
+ensure "$WS_ID" "NavAIgate Workspace" "$NAV_MATCH" "git:${REPO_URL}@${REPO_REF}" --plugin workspace
+ensure "kanban" "Kanban" "$NAV_MATCH" "git:${REPO_URL}@${REPO_REF}" --plugin kanban
 
 step "Installing the companions (made by other people, MIT, from their own repositories)"
-ensure "project-folders" "Projects & Sections by VKirill (folders, Move to folder)" "$PF_MATCH" "$PF_SOURCE"
+FALLBACK="$PF_FALLBACK" ensure "project-folders" "Projects & Sections by VKirill (folders, Move to folder)" "$PF_MATCH" "$PF_SOURCE"
 ensure "agent-board" "Agent Board by aaronphifer" "$AB_MATCH" "$AB_SOURCE"
 
 step "Checking bb's built-in plugins"

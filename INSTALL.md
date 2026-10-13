@@ -32,12 +32,12 @@ If you'd rather install one plugin at a time, run these in a terminal or a bb ch
 ```sh
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
-bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0
+bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@v0.6.19
 bb plugin install git:https://github.com/aaronphifer/bb-plugin-agent-board.git@semver:^0.6.1
 bb plugin install tasks
 ```
 
-Projects & Sections (by VKirill) and Agent Board (by aaronphifer) are free MIT plugins made by other people, not part of BB Overlay. Skip Projects & Sections and "Move to folder" shows greyed out until you install it.
+Projects & Sections (by VKirill) and Agent Board (by aaronphifer) are free MIT plugins made by other people, not part of BB Overlay. Skip Projects & Sections and "Move to folder" shows greyed out until you install it. Its line is pinned to 0.6.19, the last release that runs on standard bb. Later releases need VKirill's own build of bb.
 
 **Got the zip instead?** Unzip it somewhere permanent (for example your Documents folder; bb runs the plugins from there, so don't delete it). Then in a bb chat say: "In the folder `<drag the unzipped folder here>`, run `npm ci` inside `plugins/workspace` and `plugins/kanban`, then install both with `bb plugin install path:<that folder> --plugin workspace` and `--plugin kanban`." Then install the companions with the last three lines above.
 
@@ -78,6 +78,7 @@ Your name and keys are saved only on your Mac, in a hidden folder called `.confi
 - **The inbox is empty:** check that Gmail is connected in Composio, then press **Test** next to Composio in Set up. It tells you how many Gmail accounts it found.
 - **Home is blank on bb 0.46:** run the installer again to update, then reload with Cmd-R.
 - **"Move to folder" is greyed out:** Projects & Sections isn't installed. Click it to copy the install line, or run the installer again.
+- **Projects & Sections says "no release matching ^0.6.0 runs on this bb":** that's the old install line. Use the 0.6.19 line above, or run the installer again.
 - **Anything else:** ask in a bb chat: "NavAIgate Workspace isn't showing X, can you check the plugin?" The agent can read the plugin's logs.
 
 ## The rules, in plain words
