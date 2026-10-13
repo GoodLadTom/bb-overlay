@@ -18,6 +18,18 @@ Third-party names and logos shown in the interface (Gmail, Google Calendar,
 Calendly, Composio, ElevenLabs, Blotato, Claude, Codex, Cursor and others)
 belong to their owners and are shown only to identify those services.
 
+Companion plugins (not part of this software)
+---------------------------------------------
+install.sh also installs two plugins made by other people. They are not part
+of BB Overlay, are not covered by LICENSE or this NOTICE, and are not ours.
+They install directly from their authors' own repositories, under their own
+MIT licences, and keep their own updates:
+
+- Projects & Sections (project-folders), by VKirill, MIT licence:
+  https://github.com/VKirill/bb-plugin-project-folders
+- Agent Board (agent-board), by aaronphifer, MIT licence:
+  https://github.com/aaronphifer/bb-plugin-agent-board
+
 Additional permissions
 ----------------------
 NavAIgate GmbH & Co. KG grants the following permissions in addition to

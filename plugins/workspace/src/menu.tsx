@@ -38,6 +38,7 @@ export function MenuItem({
   hint,
   danger,
   disabled,
+  muted,
   checked,
   swatch,
   lead,
@@ -48,13 +49,15 @@ export function MenuItem({
   hint?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** Greyed out but still clickable, for features waiting on a companion plugin. */
+  muted?: boolean;
   checked?: boolean;
   swatch?: string;
   lead?: ReactNode;
   onSelect: () => void;
 }) {
   return (
-    <CM.Item className={cn(row, danger && "text-destructive")} disabled={disabled} onSelect={onSelect}>
+    <CM.Item className={cn(row, danger && "text-destructive", muted && "opacity-55")} disabled={disabled} onSelect={onSelect}>
       {lead ? (
         <span className="flex size-4 shrink-0 items-center justify-center">{lead}</span>
       ) : swatch ? (

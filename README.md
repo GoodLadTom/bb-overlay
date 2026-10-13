@@ -35,22 +35,32 @@ Two bb plugins:
 
 ## Install
 
-You need bb installed and signed in to at least one harness (Claude Code, Codex or Cursor).
+You need bb installed (0.45 or later, on macOS or Linux), open, and signed in to at least one harness (Claude Code, Codex or Cursor). Then run one command in a terminal:
 
-**The easy way.** Open a chat in bb and paste:
-
-```text
-Install the two bb plugins from https://github.com/skyremote/bb-overlay:
-bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
-bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
-Then open Home and walk me through Set up.
+```sh
+curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash
 ```
 
-**From a terminal:**
+It installs everything BB Overlay uses, in one go: the workspace and Kanban plugins from this repository, the two companion plugins from their own repositories (Projects & Sections for folders, and Agent Board), and bb's built-in Tasks. Then it turns on the NavAIgate theme and the NavAIgate rail as the sidebar list, reloads, and prints a checklist. Reload bb, open **Home** and walk through Set up.
+
+**Read it first.** It's a good habit to read a script before you pipe it into a shell: [install.sh](install.sh). To see every command it would run without changing anything:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash -s -- --dry-run
+```
+
+Safe to run again: it updates what's already there within its own pin, never removes or downgrades anything, and leaves alone any plugin you installed from somewhere else. If a different NavAIgate rail is already your sidebar list, it leaves your theme and rail as they are; `--no-look` skips that step altogether. There is no Windows version, because bb runs on macOS and Linux.
+
+**Prefer a bb chat?** Paste: "Run the BB Overlay installer: `curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash`. Then open Home and walk me through Set up."
+
+### Install by hand
 
 ```sh
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
+bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0
+bb plugin install git:https://github.com/aaronphifer/bb-plugin-agent-board.git@semver:^0.6.1
+bb plugin install tasks
 ```
 
 Then pick the look in bb: **Settings, Appearance**. Choose the NavAIgate theme and the NavAIgate rail as the thread list. (On bb 0.44 and 0.45 there is also a NavAIgate sidebar header; bb 0.46 removed that option.)
@@ -100,19 +110,23 @@ This computer has to stay awake while you do this, because it is the bb server t
 - bb 0.44 or later, including bb 0.46, on macOS. The always-on machine can be macOS or Linux. Linux as the main computer is not tested yet, but 1.1.0 removes the macOS-only assumptions we knew about.
 - Your own subscriptions: Claude Code, Codex or Cursor for the harnesses, plus any of the services above you choose to connect. Each one bills you directly.
 
-## Recommended companion plugins
+## Companion plugins
 
-These are made by other people and are not part of BB Overlay. Install them only if you want what they add:
+The installer adds two plugins made by other people. They are not part of BB Overlay and not ours: both are MIT-licensed, and they install from their own repositories, so they keep their own updates and their own licences.
 
-- **Projects & Sections** by VKirill (MIT), for real folders in the rail, including folders inside folders:
+| Plugin | Author | Licence | What it adds here |
+| --- | --- | --- | --- |
+| [Projects & Sections](https://github.com/VKirill/bb-plugin-project-folders) (`project-folders`) | VKirill | MIT | Real folders in the rail, folders inside folders, and "Move to folder" |
+| [Agent Board](https://github.com/aaronphifer/bb-plugin-agent-board) (`agent-board`) | aaronphifer | MIT | A live board of every agent and sub-agent in a chat tree |
 
-  ```sh
-  bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0
-  ```
+It also uses two plugins built into bb: **Tasks** (To-do and the Board; bb ships it but it's opt-in, so the installer adds it) and, if you use it, **Account Pooler** (per-account usage in the dock and the Claude account chip; add your accounts with `bb pool`).
 
-- bb's built-in **Account Pooler** (no install; add your accounts with `bb pool`), for per-account usage in the dock and the Claude account chip.
+If a companion is missing, the rest still works. Its feature shows greyed out with the line that installs it, for example "Move to folder" says "Install project-folders to use folders".
 
-Without them the rail, dock and chips still work; folders and pooled accounts simply don't appear.
+## What's new in 1.2.0
+
+- One command now installs everything, including folders and the agent board. `install.sh` installs the workspace, Kanban, Projects & Sections, Agent Board and bb's Tasks, turns on the NavAIgate theme and rail, and prints a checklist. It's safe to run again and never removes anything.
+- "Move to folder" no longer disappears when Projects & Sections isn't installed: it shows greyed out with "Install project-folders to use folders", and clicking it copies the install line.
 
 ## What's new in 1.1.1
 
@@ -132,6 +146,8 @@ Without them the rail, dock and chips still work; folders and pooled accounts si
 - Linux fixes: the Audience cards find Chrome, Chromium, Brave or Edge on Linux (or the browser named in `NAVAIGATE_BROWSER`), the plugin keeps your own PATH so it can find `bb` and `ssh`, and the storage mount path no longer defaults to a macOS-only `/Volumes/`.
 
 ## Updating
+
+Run the installer again; it updates everything it installed. Or one at a time:
 
 ```sh
 bb plugin update navaigate-workspace

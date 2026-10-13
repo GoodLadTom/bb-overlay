@@ -4,36 +4,46 @@ About 15 minutes. No coding needed: bb's agent does the technical part for you.
 
 ## Before you start
 
-- A Mac with **bb** installed ([getbb.app](https://getbb.app)).
+- A Mac or a Linux computer with **bb** 0.45 or later installed ([getbb.app](https://getbb.app)).
 - At least one AI harness signed in inside bb: Claude Code, Codex or Cursor.
 - Optional, for the full experience: accounts with **Composio** (email and calendar), **TypeSafe** (Jev, the inbox sorter), **ElevenLabs** (voice), **Calendly** and **Blotato**. You can add these later.
 
-## 1. Install the plugins
+## 1. Install everything with one command
 
-1. Open bb and start a new chat (any project is fine).
-2. Paste this message and send it:
+1. Open bb and leave it open.
+2. Open a terminal (on a Mac: press Cmd-Space, type **Terminal**, press Return).
+3. Paste this line and press Return:
 
-   ```text
-   Install the two bb plugins from https://github.com/skyremote/bb-overlay:
-   bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
-   bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
-   Then open Home and walk me through Set up.
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash
    ```
 
-3. bb asks you to confirm each install, because plugins run on your computer. Approve both.
-4. When it's finished, reload bb with **Cmd-R**.
+4. Wait for the checklist at the end. It installs the workspace, the Kanban board, folders (Projects & Sections), the Agent Board and bb's Tasks, and turns on the NavAIgate theme and rail.
+5. Reload bb with **Cmd-R** (Ctrl-R on Linux).
 
-**Got the zip instead?** Unzip it somewhere permanent (for example your Documents folder; bb runs the plugins from there, so don't delete it). Then in a bb chat say: "In the folder `<drag the unzipped folder here>`, run `npm ci` inside `plugins/workspace` and `plugins/kanban`, then install both with `bb plugin install path:<that folder> --plugin workspace` and `--plugin kanban`."
+**Read it first.** You can read the script before running it: [install.sh](install.sh). To see what it would do without changing anything, add `-s -- --dry-run` after `bash`. It's safe to run again any time to update everything, and it never removes anything.
 
-**Optional companion.** For real folders in the sidebar, also install the free Projects & Sections plugin (made by someone else, not part of BB Overlay):
+**Rather not use a terminal?** Open a chat in bb and send: "Run the BB Overlay installer: `curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash`. Then open Home and walk me through Set up." Approve the command when bb asks.
 
-```text
+### Install by hand
+
+If you'd rather install one plugin at a time, run these in a terminal or a bb chat, approving each one:
+
+```sh
+bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
+bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
 bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0
+bb plugin install git:https://github.com/aaronphifer/bb-plugin-agent-board.git@semver:^0.6.1
+bb plugin install tasks
 ```
 
-## 2. Turn on the look
+Projects & Sections (by VKirill) and Agent Board (by aaronphifer) are free MIT plugins made by other people, not part of BB Overlay. Skip Projects & Sections and "Move to folder" shows greyed out until you install it.
 
-In bb, open **Settings, then Appearance**:
+**Got the zip instead?** Unzip it somewhere permanent (for example your Documents folder; bb runs the plugins from there, so don't delete it). Then in a bb chat say: "In the folder `<drag the unzipped folder here>`, run `npm ci` inside `plugins/workspace` and `plugins/kanban`, then install both with `bb plugin install path:<that folder> --plugin workspace` and `--plugin kanban`." Then install the companions with the last three lines above.
+
+## 2. Check the look
+
+The installer turns these on for you. If it said "by hand", or you skipped it, open **Settings, then Appearance** in bb:
 
 - **Theme:** NavAIgate
 - **Thread list:** NavAIgate rail
@@ -66,7 +76,8 @@ Your name and keys are saved only on your Mac, in a hidden folder called `.confi
 
 - **A Home card says to add a key:** open **Set up** in the sidebar and add or test that key.
 - **The inbox is empty:** check that Gmail is connected in Composio, then press **Test** next to Composio in Set up. It tells you how many Gmail accounts it found.
-- **Home is blank on bb 0.46:** update to BB Overlay 1.1.0 (`bb plugin update navaigate-workspace`), then reload with Cmd-R.
+- **Home is blank on bb 0.46:** run the installer again to update, then reload with Cmd-R.
+- **"Move to folder" is greyed out:** Projects & Sections isn't installed. Click it to copy the install line, or run the installer again.
 - **Anything else:** ask in a bb chat: "NavAIgate Workspace isn't showing X, can you check the plugin?" The agent can read the plugin's logs.
 
 ## The rules, in plain words

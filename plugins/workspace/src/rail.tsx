@@ -23,7 +23,7 @@ import { LogoOrb } from "./orb";
 import { useVoiceState } from "./voice";
 import { cn } from "@/lib/utils";
 import { GOLD, GOLD_INK, Lattice, Node, ago, byUrgencyThenRecent, caps, harnessOf, stateOf, tnum, type Harness } from "./shared";
-import { folderOfThread, goTo, newChatInFolderUrl, slug, useFolders, type Directory, type Folder, type FolderData } from "./folders";
+import { PROJECT_FOLDERS_INSTALL, folderOfThread, goTo, newChatInFolderUrl, slug, useFolders, type Directory, type Folder, type FolderData } from "./folders";
 import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./menu";
 import { TAG_CSS, useRailState, type LaterReason, type RailOps, type Tag } from "./rail-state";
 import { LATER_LABEL, StatusMark } from "./status-mark";
@@ -192,13 +192,22 @@ type RowCtx = {
   onNewTag: (threadIds: string[]) => void;
 };
 
-function ThreadRow({ thread, active, depth, now, onNavigate, moveTargets, onMove, ctx }: {
+/** Copy the project-folders install line, for the greyed-out folder actions. */
+function copyFoldersInstall() {
+  void navigator.clipboard.writeText(PROJECT_FOLDERS_INSTALL).then(
+    () => toast.success("Install command copied. Paste it into a terminal or a bb chat, then reload bb."),
+    () => toast.message(PROJECT_FOLDERS_INSTALL),
+  );
+}
+
+function ThreadRow({ thread, active, depth, now, onNavigate, moveTargets, foldersMissing, onMove, ctx }: {
   thread: PluginSidebarThread;
   active: boolean;
   depth: number;
   now: number;
   onNavigate: () => void;
   moveTargets: FolderOption[] | null;
+  foldersMissing: boolean;
   onMove: (folderId: string | null) => void;
   ctx: RowCtx;
 }) {
@@ -326,6 +335,8 @@ function ThreadRow({ thread, active, depth, now, onNavigate, moveTargets, onMove
             <MenuItem key={t.id ?? "root"} icon={t.id ? "Folder" : "Folder"} label={`${"  ".repeat(t.depth)}${t.label}`} onSelect={() => onMove(t.id)} />
           ))}
         </MenuSub>
+      ) : foldersMissing && moveTargets ? (
+        <MenuItem muted icon="FolderEdit" label="Move to folder" hint="Install project-folders to use folders" onSelect={copyFoldersInstall} />
       ) : null}
       <MenuItem
         icon="Copy"
@@ -618,6 +629,7 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
           now={now}
           onNavigate={onNavigate}
           moveTargets={child ? null : (model.moveTargets.get(t.projectId) ?? []).filter((o) => !o.group)}
+          foldersMissing={!folders.available}
           onMove={(folderId) => folders.placeThread(t.id, t.projectId, folderId).catch(report("Move"))}
         />
         {kids.length > 0
@@ -1135,7 +1147,10 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
             <p className="mx-1 border-t border-border pt-3 text-[12px] text-muted-foreground">Nothing matches this filter.</p>
           ) : null}
           {!folders.available ? (
-            <p className="mx-1 mt-2 text-[11px] text-muted-foreground">Folders need the project-folders plugin.</p>
+            <p className="mx-1 mt-2 text-[11px] text-muted-foreground">
+              Install project-folders to use folders.{" "}
+              <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={copyFoldersInstall}>Copy the install command</button>
+            </p>
           ) : null}
           {selected.size > 0 ? (
             <BulkBar
