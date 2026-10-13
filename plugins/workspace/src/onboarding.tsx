@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import type { Area, KeyName, Profile } from "../server-profile";
+import { CompanionsCheck } from "./companions";
 import { LogoOrb } from "./orb";
 import { GOLD, caps } from "./shared";
 
@@ -328,6 +329,7 @@ export function SetupWizard({ onDone }: { onDone?: () => void }) {
                 <li>Always-on machine: {draft.machine?.sshHost ? `${draft.machine.label} (${draft.machine.sshHost})` : "none"}</li>
                 <li>Storage at home: {draft.storage?.path.trim() ? `${draft.storage.label} at ${draft.storage.path}` : "none"}</li>
               </ul>
+              <CompanionsCheck />
             </div>
           ) : null}
         </section>

@@ -121,7 +121,11 @@ The installer adds two plugins made by other people. They are not part of BB Ove
 
 It also uses two plugins built into bb: **Tasks** (To-do and the Board; bb ships it but it's opt-in, so the installer adds it) and, if you use it, **Account Pooler** (per-account usage in the dock and the Claude account chip; add your accounts with `bb pool`).
 
-If a companion is missing, the rest still works. Its feature shows greyed out with the line that installs it, for example "Move to folder" says "Install project-folders to use folders".
+If a companion is missing, the rest still works. Its feature shows greyed out with the line that installs it, for example "Move to folder" says "Install project-folders to use folders", and the last step of Set up lists every companion as installed or missing, with a Copy button for its install line.
+
+## What's new in 1.2.1
+
+- Set up now has a Companions check on its last step: Projects & Sections, Agent Board, Kanban and Tasks, each shown as installed, turned off or missing, with the line that installs it and a Copy button, plus the one command that installs everything.
 
 ## What's new in 1.2.0
 
