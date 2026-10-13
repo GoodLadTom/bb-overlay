@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NavAIgate Workspace for bb — how it works</title>
+<meta name="description" content="The guide to NavAIgate Workspace for bb: the run-sheet sidebar, tags, Come back later, folders, the to-do panel (Command-Shift-D), the Board, the usage dock and charts in replies.">
+<meta property="og:title" content="NavAIgate Workspace for bb">
+<meta property="og:description" content="See what every harness is working on, tag and flag chats, and track to-dos that move on their own.">
+<meta property="og:image" content="img/poster.jpg">
+<link rel="icon" href="img/mark.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ground: #fbfaf8; --surface: #f2f0eb; --ink: #202225; --quiet: #5c5a54; --faint: #6c665c;
+    --rule: #dedbd1; --rule-strong: #c4bcae; --gold: #d4a354; --gold-ink: #8a6a2c; --green: #1f7a4d; --red: #b42318;
+    --card: #ffffff; --shadow: 0 1px 2px rgb(24 24 27 / .05), 0 10px 30px rgb(24 24 27 / .07);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --ground: #131315; --surface: #1a1a1e; --ink: #f4f2ec; --quiet: #b8b2a7; --faint: #8a847a;
+    --rule: #2a2a30; --rule-strong: #3d3d45; --gold-ink: #d4a354; --green: #5fcf94; --red: #f0907f;
+    --card: #1a1a1e; --shadow: 0 1px 2px rgb(0 0 0 / .5), 0 10px 30px rgb(0 0 0 / .35);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --ground: #131315; --surface: #1a1a1e; --ink: #f4f2ec; --quiet: #b8b2a7; --faint: #8a847a;
+    --rule: #2a2a30; --rule-strong: #3d3d45; --gold-ink: #d4a354; --green: #5fcf94; --red: #f0907f;
+    --card: #1a1a1e; --shadow: 0 1px 2px rgb(0 0 0 / .5), 0 10px 30px rgb(0 0 0 / .35); color-scheme: dark; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ground); color: var(--ink); }
+  body { font: 16px/1.65 "IBM Plex Sans", "Helvetica Neue", system-ui, sans-serif; -webkit-font-smoothing: antialiased; font-feature-settings: "tnum" 1; }
+  a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--gold); }
+  em.f { font-family: "Fraunces", Georgia, serif; font-style: italic; font-weight: 400; }
+  code, kbd { font: 500 .88em "IBM Plex Mono", Menlo, monospace; }
+  kbd { display: inline-block; padding: 1px 7px; border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 6px; background: var(--card); }
+  pre { margin: 14px 0 0; padding: 14px 16px; overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; font: 13.5px/1.6 "IBM Plex Mono", Menlo, monospace; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 28px; }
+  header.top { position: sticky; top: 0; z-index: 5; background: color-mix(in oklab, var(--ground) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--rule); }
+  header.top .wrap { display: flex; align-items: center; gap: 14px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; text-decoration: none; }
+  .brand img { width: 20px; height: 20px; }
+  :root[data-theme="dark"] .brand img { filter: invert(1); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand img { filter: invert(1); } }
+  nav.toc { display: flex; gap: 18px; margin-left: auto; font-size: 13.5px; color: var(--quiet); }
+  nav.toc a { text-decoration: none; }
+  nav.toc a:hover { color: var(--ink); }
+  .toggle { border: 1px solid var(--rule-strong); background: var(--card); color: var(--ink); border-radius: 999px; height: 32px; padding: 0 12px; font: inherit; font-size: 13px; cursor: pointer; transition: transform .2s cubic-bezier(.34,1.56,.64,1); }
+  .toggle:active { transform: scale(.92); }
+  .caps { font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .hero { padding: 72px 0 36px; }
+  .hero h1 { margin: 10px 0 0; font-size: clamp(38px, 6vw, 64px); line-height: 1.05; font-weight: 600; letter-spacing: -.02em; }
+  .hero p.lead { max-width: 720px; margin: 22px 0 0; font-size: 19px; color: var(--quiet); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 500; text-decoration: none; border: 1px solid var(--rule-strong); background: var(--card); }
+  .btn.primary { background: var(--ink); color: var(--ground); border-color: var(--ink); }
+  .film { margin: 40px 0 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--rule); box-shadow: var(--shadow); background: #131315; aspect-ratio: 16 / 9; }
+  .film video, .film img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .film video[hidden] { display: none; }
+  .film .soon { display: grid; place-items: center; height: 100%; color: #b8b2a7; font-size: 14px; }
+  section.block { padding: 56px 0 8px; border-top: 1px solid var(--rule); margin-top: 48px; }
+  section.block h2 { margin: 8px 0 0; font-size: 30px; line-height: 1.2; font-weight: 600; letter-spacing: -.01em; }
+  section.block > .wrap > p, section.block .col p { max-width: 720px; color: var(--quiet); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 36px; align-items: start; margin-top: 24px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } nav.toc { display: none; } }
+  figure.shot { margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--rule); box-shadow: var(--shadow); background: var(--card); }
+  figure.shot img { display: block; width: 100%; height: auto; }
+  figure.shot figcaption { padding: 10px 14px; font-size: 12.5px; color: var(--faint); border-top: 1px solid var(--rule); }
+  ol.steps, ul.points { margin: 16px 0 0; padding: 0; list-style: none; }
+  ol.steps { counter-reset: s; }
+  ol.steps li, ul.points li { position: relative; padding: 10px 0 10px 34px; border-top: 1px solid var(--rule); }
+  ol.steps li:first-child, ul.points li:first-child { border-top: 0; }
+  ol.steps li::before { counter-increment: s; content: counter(s); position: absolute; left: 0; top: 10px; font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 17px; color: var(--gold-ink); }
+  ul.points li::before { content: ""; position: absolute; left: 6px; top: 20px; width: 6px; height: 6px; background: var(--gold); }
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 22px; }
+  .key { padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); }
+  .key b { display: block; font-size: 14px; }
+  .key span { display: block; margin-top: 6px; font-size: 13.5px; color: var(--quiet); }
+  .marks { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 20px; }
+  .mark { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--card); font-size: 14px; }
+  .note { margin-top: 20px; padding: 14px 16px; border-left: 2px solid var(--gold); background: var(--surface); border-radius: 0 10px 10px 0; font-size: 14.5px; color: var(--quiet); }
+  footer { margin-top: 72px; padding: 32px 0 56px; border-top: 1px solid var(--rule); font-size: 13.5px; color: var(--faint); }
+  /* little live marks, same as the plugin */
+  .ll { display: inline-grid; grid-template-columns: repeat(3, 4px); gap: 2px; vertical-align: middle; }
+  .ll i, .ll b { width: 4px; height: 4px; border-radius: 50%; }
+  .ll i { background: var(--gold); animation: on 880ms cubic-bezier(.23,1,.32,1) infinite; }
+  @keyframes on { 0%,100% { opacity: .16; transform: scale(.82); } 14%,34% { opacity: 1; transform: scale(1); } 52% { opacity: .16; transform: scale(.82); } }
+  .spin { transform-origin: 12px 12px; animation: spin 6s linear infinite, breathe 2.4s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes breathe { 50% { opacity: .45; } }
+  .ping { transform-origin: 12px 12px; animation: ping 2.8s cubic-bezier(.23,1,.32,1) infinite; }
+  @keyframes ping { 0% { transform: scale(.7); opacity: .55; } 70%,100% { transform: scale(1.55); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .ll i, .spin, .ping { animation: none; } }
+</style>
+<script>
+  (function () {
+    try { var t = localStorage.getItem("ws-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="img/mark.svg" alt="">NavAIgate Workspace</a>
+    <nav class="toc" aria-label="Sections">
+      <a href="#install">Install</a><a href="#rail">Sidebar</a><a href="#todo">To-do</a><a href="#board">Board</a><a href="#dock">Usage</a><a href="#keys">Shortcuts</a>
+    </nav>
+    <button class="toggle" type="button" id="themeToggle" aria-label="Switch light or dark">Light / dark</button>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <div class="caps">A plugin for bb</div>
+    <h1>NavAIgate <em class="f">Workspace</em></h1>
+    <p class="lead">So I use bb every day to run Claude, Codex and Cursor side by side, and the thing I kept losing was what each one was actually doing, so we built a sidebar that shows what every harness is working on, a to-do list that lives next to the chat it came from, and a board that moves when the work moves. This page is how it all works, one piece at a time.</p>
+    <div class="actions">
+      <a class="btn primary" href="#install">Install it</a>
+      <a class="btn" href="https://github.com/skyremote/bb-overlay">Source on GitHub</a>
+      <a class="btn" href="#keys">Shortcuts</a>
+    </div>
+    <div class="film" id="film">
+      <video id="trailer" controls playsinline preload="metadata" poster="img/poster.jpg" hidden>
+        <source src="trailer.mp4" type="video/mp4">
+      </video>
+      <div class="soon" id="filmSoon">The 25-second trailer lands here shortly.</div>
+    </div>
+  </div>
+
+  <section class="block" id="install">
+    <div class="wrap">
+      <div class="caps">Step one</div>
+      <h2>Install it in <em class="f">two</em> commands</h2>
+      <p>You need bb 0.44 or later and at least one harness signed in, and then it's two lines in a terminal, one for the workspace and one for the Kanban board.</p>
+<pre>bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
+bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban</pre>
+      <p>Then pick the look in bb, so open <b>Settings, Appearance</b>, and choose the <b>NavAIgate</b> theme and the <b>NavAIgate rail</b> as the thread list, which you can change back any time. On bb 0.44 and 0.45 there's also a NavAIgate sidebar header; bb 0.46 removed that option.</p>
+      <p>For real folders in the sidebar, also install the free <b>Projects &amp; Sections</b> plugin by VKirill, which is made by someone else and isn't part of BB Overlay:</p>
+<pre>bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0</pre>
+      <p>Not technical? The <a href="https://github.com/skyremote/bb-overlay/blob/main/INSTALL.md">step-by-step install guide</a> walks you through it, including Set up on first run.</p>
+      <div class="note">Folders need the <b>Projects &amp; Sections</b> plugin, to-dos are stored in bb's own <b>Tasks</b> plugin, and the usage dock reads bb's <b>Account Pooler</b> if you use it. If one of those isn't there, the rest still works, and that part just doesn't show.</div>
+    </div>
+  </section>
+
+  <section class="block" id="rail">
+    <div class="wrap">
+      <div class="caps">The sidebar</div>
+      <h2>See what every harness is <em class="f">working</em> on</h2>
+      <div class="grid">
+        <div class="col">
+          <p>The left-hand side reads like a run sheet now, and the card at the top tells you what's working right now, with a small gold lattice that turns while a chat is busy, and how many chats need you.</p>
+          <ul class="points">
+            <li>Every chat shows the harness it runs on, <b>CLAUDE</b>, <b>CODEX</b> or <b>CURSOR</b>, and the chips at the top filter to one of them.</li>
+            <li>Chats sit under their project, and with Projects &amp; Sections installed they sit inside your real folders on disk.</li>
+            <li>Click a section heading to fold it, and drag a heading above another one to change the order.</li>
+            <li>Right-click anything, a chat, a folder, a project heading or a tag, and you get the full menu for it.</li>
+          </ul>
+        </div>
+        <figure class="shot"><a href="img/01-rail-and-control-room.webp"><img src="img/01-rail-and-control-room.webp" alt="The NavAIgate rail with the NOW card, harness filters, tags and sections, next to the Control room" loading="lazy" width="2400" height="1500"></a><figcaption>The rail, with the Control room on the home screen.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="tags">
+    <div class="wrap">
+      <div class="caps">Tags and flags</div>
+      <h2>Tag it, flag it, <em class="f">come back</em> to it</h2>
+      <div class="grid">
+        <div class="col">
+          <ol class="steps">
+            <li>Press <b>+ Tag</b> under the harness chips, type a name, click the small square to pick a colour, and press <kbd>Enter</kbd>.</li>
+            <li>Right-click a chat, go to <b>Tags</b>, and tick the tags you want on it. Click a tag chip at the top to show only those chats.</li>
+            <li>Right-click a chat, go to <b>Come back later</b>, and pick why. It moves into its own section at the top so you can't miss it.</li>
+            <li>To clear a flag, right-click it again and choose <b>Clear the flag</b>.</li>
+          </ol>
+          <div class="marks">
+            <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24"><circle class="spin" cx="12" cy="12" r="9" fill="none" stroke="#d4a354" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="2.97 4.1"/><circle cx="12" cy="12" r="2.2" fill="#d4a354"/></svg>Come back to this</div>
+            <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" style="overflow:visible"><circle class="ping" cx="12" cy="12" r="9" fill="none" stroke="var(--green)" stroke-width="1.5"/><circle cx="12" cy="12" r="9" fill="none" stroke="var(--green)" stroke-width="2.2"/><path d="M7.5 12.25 10.5 15.25 16.75 8.75" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Done, check it later</div>
+            <div class="mark"><svg width="18" height="18" viewBox="0 0 24 24" style="overflow:visible"><circle class="ping" cx="12" cy="12" r="9" fill="none" stroke="var(--red)" stroke-width="1.5"/><circle cx="12" cy="12" r="9" fill="none" stroke="var(--red)" stroke-width="2.2"/><path d="M8.75 8.75 15.25 15.25M15.25 8.75 8.75 15.25" fill="none" stroke="var(--red)" stroke-width="2.4" stroke-linecap="round"/></svg>Has a mistake, come back</div>
+          </div>
+        </div>
+        <figure class="shot"><a href="img/04-come-back-later-menu.webp"><img src="img/04-come-back-later-menu.webp" alt="The right-click menu on a chat with the Come back later options open" loading="lazy" width="1700" height="1000"></a><figcaption>Right-click a chat, then Come back later.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="folders">
+    <div class="wrap">
+      <div class="caps">Folders</div>
+      <h2>Your real <em class="f">folders</em>, in the sidebar</h2>
+      <p>Each project is a folder on your drive, and the folders you add show up underneath it, and the point is you choose which ones you want to see, so the project root stays the same and you organise inside it.</p>
+      <ol class="steps">
+        <li>Hover a project heading and press the folder-plus button for a <b>new folder</b>, or the open-folder button to <b>add folders that already exist</b> on the drive.</li>
+        <li>Drag a chat onto a folder to file it there. That only changes where it's listed, and nothing moves on disk.</li>
+        <li>Start a chat inside a folder with the speech-bubble button on the folder, and the agent works in that folder, so its files land there.</li>
+        <li>Right-click a folder to rename it, add a subfolder, move it, copy its path, or take it off the sidebar. Taking it off the sidebar keeps every file.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="block" id="select">
+    <div class="wrap">
+      <div class="caps">Doing things in bulk</div>
+      <h2>Select a <em class="f">few</em> at once</h2>
+      <p>Hold <kbd>⌘</kbd> and click to pick chats one by one, hold <kbd>⇧</kbd> and click to pick a run of them, or press <b>Select</b> next to the harness chips to get checkboxes. "Needs you" has its own select-all button. A bar appears at the bottom where you can flag, tag, pin, archive or delete the lot, and delete asks you once for the whole batch. Press <kbd>Esc</kbd> to clear it.</p>
+    </div>
+  </section>
+
+  <section class="block" id="todo">
+    <div class="wrap">
+      <div class="caps">To-do</div>
+      <h2>Say it once, and it's on the <em class="f">list</em></h2>
+      <div class="grid">
+        <div class="col">
+          <p>The quickest way is just to tell the agent, so for example "we've got the hero copy, a pricing FAQ and the nav fix to do", and it adds three items linked to that chat, and you'll see them straight away.</p>
+          <ol class="steps">
+            <li>Open the list on the right with <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>D</kbd> (Command-Shift-D), or press the <b>To-do</b> button in the chat header, which also shows how many are open.</li>
+            <li>Switch between <b>This chat</b>, the chat's <b>folder</b> and <b>Everything</b> at the top.</li>
+            <li>Type in the box and press <kbd>Enter</kbd>. Paste a list and every line becomes its own item.</li>
+            <li>Click the ring next to an item to tick it off, double-click the text to rename it, and right-click to move it, link it to this chat or folder, or delete it.</li>
+          </ol>
+          <div class="note">Folders in the sidebar show a small count of open items inside them. The agent tool only appears in chats started after you install the plugin.</div>
+        </div>
+        <figure class="shot"><a href="img/02-todo-panel.webp"><img src="img/02-todo-panel.webp" alt="A chat with the To-do panel open on the right, showing Doing, Check and To do" loading="lazy" width="1700" height="1000"></a><figcaption>The To-do panel, opened with Command-Shift-D.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="board">
+    <div class="wrap">
+      <div class="caps">The Board</div>
+      <h2>A board that moves <em class="f">itself</em></h2>
+      <div class="grid">
+        <div class="col">
+          <p>Board is in the sidebar navigation, and it has four columns, To do, Doing, Check and Done, and the difference is that it moves on what the chats are actually doing, not on what an agent says about itself.</p>
+          <ul class="points">
+            <li>When a chat linked to an item starts working, the item moves to <b>Doing</b> on its own, with the lattice turning.</li>
+            <li>When every linked chat has finished, it moves to <b>Check</b>, ready for you to look at.</li>
+            <li>Nothing is ever moved to <b>Done</b> for you. Drag any card to put it where you want.</li>
+            <li>The chips at the top filter by project, and the box in To do adds straight to the board.</li>
+          </ul>
+        </div>
+        <figure class="shot"><a href="img/03-board-dark.webp"><img src="img/03-board-dark.webp" alt="The Board in dark mode with To do, Doing, Check and Done columns" loading="lazy" width="2400" height="1500"></a><figcaption>The Board, in dark mode.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="dock">
+    <div class="wrap">
+      <div class="caps">Usage</div>
+      <h2>Know where you <em class="f">stand</em> before you hit a limit</h2>
+      <p>Under the chat box there's a line that shows how much of the context the chat has used, with a small dial and a tick where auto-compaction starts, and next to it the plan and the session and weekly windows of the account that chat is running on. If you run more than one subscription through bb's Account Pooler, it shows the one that chat is actually using.</p>
+    </div>
+  </section>
+
+  <section class="block" id="voice">
+    <div class="wrap">
+      <div class="caps">Voice</div>
+      <h2>Talk to it, and hear what <em class="f">happened</em></h2>
+      <p>Press <b>Talk</b> in the chat header, or <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>E</kbd>, and just say what you want done, and Savvy, a voice agent on ElevenLabs, writes it up as a clear prompt and sends it to whichever harness is in that chat. When the harness finishes, she tells you in a couple of sentences what was done, what's left and whether it needs you, and the Voice tab on the right keeps the whole transcript.</p>
+      <ul class="points">
+        <li>Ask "what's it doing?" or "what did it say?" and she checks the chat for you.</li>
+        <li>Say "stop it" and she stops the harness, or list things to do and she adds them to the to-do list.</li>
+        <li>It needs an ElevenLabs API key in the plugin settings. The key stays on your bb server, and ElevenLabs bills the conversation to your account.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="agents">
+    <div class="wrap">
+      <div class="caps">Agents</div>
+      <h2>See the whole run, and start an agent when you <em class="f">want</em> one</h2>
+      <p>Open <b>Agents</b> on the right of any chat, or press <kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>A</kbd>, and <b>This run</b> shows the chat and every sub-agent under it as a tree, live, with which harness each one is on, whether it's working or needs you, and a session log of every change while the panel is open. <b>Your agents</b> lists every agent you've defined in <code>~/.claude/agents</code>, grouped like a crew, chief of staff first, then the leads, then the specialists. Pick one and it starts on the model its file pins, and a lead can run in its own chat so it can bring in sub-agents of its own.</p>
+      <ul class="points">
+        <li>Pick a role (Explorer, Worker, Reviewer, Researcher) or one of your own agents, choose the harness and model with bb's own picker, write the task and press <b>Spin up</b>.</li>
+        <li>It starts as a child of the chat you're in, in the same workspace, and appears in the tree and in the rail straight away.</li>
+        <li>Click any card in the tree to jump into that agent's chat.</li>
+      </ul>
+      <div class="shots" style="max-width:560px;margin-top:22px">
+        <figure class="shot"><a href="img/agents-panel-dark.png"><img src="img/agents-panel-dark.png" alt="The Agents panel with the lead chat, one sub-agent working, the session log and the Spin up form" loading="lazy" width="640" height="952"></a><figcaption>The Agents panel with one sub-agent running.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="charts">
+    <div class="wrap">
+      <div class="caps">Charts in replies</div>
+      <h2>Answers that come back as a <em class="f">chart</em></h2>
+      <p>Agents can draw a real chart in a reply instead of a list of numbers, and the plugin teaches them how. If you want to write one yourself, it's one line:</p>
+<pre>::nav-chart{kind="bars" title="Threads by harness" data="Claude:26,Codex:9,Cursor:4" highlight="Claude"}</pre>
+      <p>The kinds are <code>bars</code>, <code>stats</code>, <code>split</code> and <code>steps</code>, and <code>note</code> adds a source line underneath.</p>
+      <p>Two more work the same way. <code>::nav-links</code> turns a list of links into cards in each platform's own colour, so LinkedIn is blue, YouTube is red and X and Threads are black, and <code>::nav-pipeline</code> draws an agent stack, who plans, who runs side by side, who reviews and who watches, with a session log underneath.</p>
+<pre>::nav-links{title="Posted" items="https://www.linkedin.com/... https://x.com/... https://youtube.com/..."}
+::nav-pipeline{layers="Opus|plans|orange ; Worker|edits|blue , Explorer|reads|blue ; Opus|reviews|orange" side="Fable|advisor|plum"}</pre>
+      <div class="shots" style="max-width:560px;margin-top:22px">
+        <figure class="shot"><a href="img/mods-dark.png"><img src="img/mods-dark.png" alt="Link cards for LinkedIn, X, Threads, YouTube and GitHub above an agent stack diagram with a session log" loading="lazy" width="730" height="650"></a><figcaption>Link cards and an agent stack, drawn inside a reply.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="keys">
+    <div class="wrap">
+      <div class="caps">Quick reference</div>
+      <h2>Shortcuts and <em class="f">where</em> things are</h2>
+      <div class="keys">
+        <div class="key"><b><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>D</kbd></b><span>Open the To-do panel in the current chat, or the Board when there's no chat open.</span></div>
+        <div class="key"><b><kbd>⌘</kbd> + click</b><span>Select or deselect one chat.</span></div>
+        <div class="key"><b><kbd>⇧</kbd> + click</b><span>Select a run of chats.</span></div>
+        <div class="key"><b><kbd>Esc</kbd></b><span>Clear the selection.</span></div>
+        <div class="key"><b><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>E</kbd></b><span>Start or end a voice session with Savvy.</span></div>
+        <div class="key"><b><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>A</kbd></b><span>Open the Agents panel: the live run, your agents and Spin up.</span></div>
+        <div class="key"><b>Right-click</b><span>The menu for any chat, folder, project heading or tag.</span></div>
+        <div class="key"><b>Half-moon button</b><span>Bottom of the sidebar, next to Settings. Switches light and dark.</span></div>
+        <div class="key"><b>Board</b><span>In the sidebar navigation, under Search threads once you drag it up.</span></div>
+        <div class="key"><b>Rebind a shortcut</b><span>Find "Workspace: open to-do" in bb's keyboard settings or the command palette.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="data">
+    <div class="wrap">
+      <div class="caps">Data and privacy</div>
+      <h2>What it <em class="f">touches</em></h2>
+      <ul class="points">
+        <li>To list your to-dos and see which account a chat runs on, it opens the Tasks and Account Pooler databases on your own machine read-only, and every change goes through those plugins' own controls.</li>
+        <li>Tags, flags, section order and folder links are kept in bb's plugin storage on your bb server, so every window on that machine shows the same thing.</li>
+        <li>The theme loads IBM Plex and Fraunces from Google Fonts, and nothing else leaves your machine. There's no account, no key and no tracking.</li>
+      </ul>
+      <p>To go back to bb's own sidebar, choose it in Settings, Appearance, Sidebar, and to remove the plugin, run <code>bb plugin uninstall navaigate-workspace</code>, which also deletes its tags, flags and folder links, while your to-do items stay in bb Tasks.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">Built by <a href="https://navaigate.dev">NavAIgate</a>. Source and releases on <a href="https://github.com/skyremote/bb-overlay">GitHub</a>. The loader, status marks and dial were inspired by components from <a href="https://reactbits.dev">React Bits</a>.</div>
+</footer>
+
+<script>
+  (function () {
+    var btn = document.getElementById("themeToggle");
+    btn.addEventListener("click", function () {
+      var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      var next = cur === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      try { localStorage.setItem("ws-theme", next); } catch (e) {}
+    });
+    // Show the trailer once it exists; keep the placeholder until then.
+    var v = document.getElementById("trailer"), soon = document.getElementById("filmSoon");
+    fetch("trailer.mp4", { method: "HEAD" }).then(function (r) {
+      if (r.ok) { v.hidden = false; soon.remove(); }
+    }).catch(function () {});
+  })();
+</script>
+</body>
+</html>
