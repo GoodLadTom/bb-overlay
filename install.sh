@@ -9,15 +9,20 @@
 # then turns on the NavAIgate theme and rail, reloads, and prints a checklist.
 #
 # Safe to run again: anything already installed is updated within its own pin,
-# and nothing is ever removed or downgraded. A plugin you installed from
-# somewhere else (a local copy, say) is left exactly as it is.
+# and nothing is removed or downgraded without asking. The one thing it asks
+# about: Projects & Sections at 0.6.20 or later, or following a version range,
+# which it offers to switch to the pinned 0.6.19 (your folders are kept). A
+# plugin you installed from somewhere else (a local copy, say) is left exactly
+# as it is.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash
-#   bash install.sh [--dry-run] [--no-look] [--help]
+#   bash install.sh [--dry-run] [--no-look] [--pin-folders] [--help]
 #
-#   --dry-run   print every command, change nothing
-#   --no-look   leave the theme and the sidebar list as they are
+#   --dry-run       print every command, change nothing
+#   --no-look       leave the theme and the sidebar list as they are
+#   --pin-folders   switch Projects & Sections to 0.6.19 without asking
+#                   (your folders are kept); see MAINTAINERS.md
 
 set -euo pipefail
 
@@ -34,8 +39,12 @@ NAV_MATCH="github.com/skyremote/bb-overlay|github.com/skyremote/navaigate-worksp
 # From 0.6.20 on, Projects & Sections declares functions only VKirill's own bb
 # build has (vk-requires.json), yet bb still offers those releases to a range.
 # 0.6.19 is the last release that runs on standard bb, so it is installed
-# pinned, and an existing copy is never updated by this script.
-PF_SOURCE="git:https://github.com/VKirill/bb-plugin-project-folders.git@v0.6.19"
+# pinned, and an existing copy is never updated by this script. A copy at
+# 0.6.20 or later, or one that follows a version range (so bb offers it the
+# newer releases), is offered a switch to the pinned 0.6.19. When to lift the
+# pin: MAINTAINERS.md.
+PF_VERSION="0.6.19"
+PF_SOURCE="git:https://github.com/VKirill/bb-plugin-project-folders.git@v${PF_VERSION}"
 PF_FALLBACK="$PF_SOURCE"
 PF_MATCH="github.com/VKirill/bb-plugin-project-folders"
 AB_SOURCE="git:https://github.com/aaronphifer/bb-plugin-agent-board.git@semver:^0.6.1"
@@ -47,17 +56,23 @@ RAIL_ID="${WS_ID}/rail"
 
 DRY_RUN=0
 SET_LOOK=1
+PIN_FOLDERS=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --no-look) SET_LOOK=0 ;;
-    -h|--help) sed -n '2,22p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --pin-folders) PIN_FOLDERS=1 ;;
+    -h|--help)
+      if [ -f "$0" ]; then awk 'NR > 1 && !/^#/ { exit } NR > 1 { sub(/^# ?/, ""); print }' "$0"
+      else echo "Options: --dry-run, --no-look, --pin-folders. Run with bash -s -- <option> after the pipe."; fi
+      exit 0 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
 
-W_INST="[installed]  "; W_UPD="[up to date] "
-if [ "$DRY_RUN" -eq 1 ]; then W_INST="[would install]"; W_UPD="[would update] "; fi
+W_INST="[installed]"; W_UPD="[up to date]"
+if [ "$DRY_RUN" -eq 1 ]; then W_INST="[would install]"; W_UPD="[would update]"; fi
+W_INST="$(printf '%-12s' "$W_INST")"; W_UPD="$(printf '%-12s' "$W_UPD")"   # line up the checklist
 
 say()  { printf '%s\n' "$*"; }
 step() { printf '\n== %s\n' "$*"; }
@@ -130,6 +145,54 @@ src_matches() {
   return 1
 }
 
+# ask <question> -> true on yes. Reads the terminal, so it works under
+# curl | bash; with no terminal (an agent, CI) the answer is no.
+ask() {
+  local reply=""
+  if (: </dev/tty) 2>/dev/null; then
+    printf '%s [y/N] ' "$1" >/dev/tty
+    read -r reply </dev/tty || reply=""
+  fi
+  case "$reply" in y|Y|yes|Yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# folders_existing <label> <version> <source>: Projects & Sections is already
+# installed from VKirill's repository. 0.6.20 and later need VKirill's own bb
+# build, and a copy that follows a range is offered those releases by bb, so
+# offer the pinned 0.6.19. bb keeps a plugin's data when it is removed, so the
+# folders survive the switch.
+folders_existing() {
+  local label="$1" ver="$2" src="$3" why=""
+  if ! version_lt "$ver" "0.6.20"; then
+    why="$ver needs VKirill's own build of bb, so on standard bb its folders can stop working"
+  elif [[ "$src" == *"@semver:"* || "$src" != *.git@* ]]; then
+    why="it follows a version range or branch, so bb offers 0.6.20 and later as updates, and those need VKirill's own build of bb"
+  fi
+  if [ -z "$why" ]; then
+    say "$label: installed ($ver, pinned). Leaving it as it is."
+    OUTCOME+=("[ok]         $label ($ver, pinned)")
+    return 0
+  fi
+  warn "$label: $why. $PF_VERSION is the last release for standard bb, and switching to it keeps your folders."
+  if [ "$DRY_RUN" -eq 1 ]; then
+    say "Would ask to switch to $PF_VERSION (or switch without asking with --pin-folders). A yes runs:"
+    run bb plugin remove project-folders --yes
+    run bb plugin install "$PF_SOURCE" --yes
+    OUTCOME+=("[would ask]  $label ($ver): switch to $PF_VERSION, pinned")
+  elif [ "$PIN_FOLDERS" -eq 1 ] || ask "Switch $label to $PF_VERSION, pinned? Your folders are kept."; then
+    if run bb plugin remove project-folders --yes && run bb plugin install "$PF_SOURCE" --yes; then
+      CHANGED+=("project-folders"); OUTCOME+=("$W_INST $label ($PF_VERSION, pinned; your folders kept)")
+    else
+      warn "The switch didn't finish. Putting back what you had."
+      bb plugin list 2>/dev/null | grep -q '^project-folders@' || run bb plugin install "$src" --yes || true
+      OUTCOME+=("[FAILED]     $label: switch to $PF_VERSION failed, see above")
+    fi
+  else
+    say "Left as it is. To switch later, run this installer again with --pin-folders (after a pipe: bash -s -- --pin-folders)."
+    OUTCOME+=("[warning]    $label ($ver): not pinned to $PF_VERSION; run again with --pin-folders")
+  fi
+}
+
 # [FALLBACK=<source>] ensure <id> <label> <match-in-source> <install args...>
 # FALLBACK is tried when the install fails, and an installed copy is never updated.
 ensure() {
@@ -153,14 +216,13 @@ ensure() {
   if [[ "$src" == builtin:* ]]; then
     say "$label: installed (${line%% *}, updates with bb)."
     OUTCOME+=("[ok]         $label")
-  elif [ -n "$fallback" ]; then
-    # Never update this one in place: bb offers releases that need VKirill's
-    # own bb build as updates, so an existing copy is left exactly as it is.
-    say "$label: installed (${line%% *}). Leaving it as it is."
-    OUTCOME+=("[ok]         $label (${line%% *}, left as it is)")
   elif [ -n "$match" ] && ! src_matches "$src" "$match"; then
     say "$label: already installed from $src. Keeping your copy as it is."
     OUTCOME+=("[kept]       $label (your own copy: $src)")
+  elif [ -n "$fallback" ]; then
+    # Never update this one in place: bb offers releases that need VKirill's
+    # own bb build as updates. Offer the pinned release instead.
+    folders_existing "$label" "${line%% *}" "$src"
   else
     say "$label: installed (${line%% *}), checking for an update."
     if run bb plugin update "$id" --yes; then
@@ -249,5 +311,5 @@ cat <<EOF
 Next:
   1. Reload bb (Cmd-R on a Mac, Ctrl-R on Linux).
   2. Open Home in the sidebar and walk through Set up.
-Run this again any time to update everything. It never removes anything.
+Run this again any time to update everything. It never removes anything without asking.
 EOF

@@ -49,7 +49,7 @@ It installs everything BB Overlay uses, in one go: the workspace and Kanban plug
 curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash -s -- --dry-run
 ```
 
-Safe to run again: it updates what's already there within its own pin, never removes or downgrades anything, and leaves alone any plugin you installed from somewhere else. If a different NavAIgate rail is already your sidebar list, it leaves your theme and rail as they are; `--no-look` skips that step altogether. There is no Windows version, because bb runs on macOS and Linux.
+Safe to run again: it updates what's already there within its own pin, never removes or downgrades anything without asking, and leaves alone any plugin you installed from somewhere else. The one thing it asks about is Projects & Sections at 0.6.20 or later: it offers to switch you to 0.6.19 and keeps your folders (`--pin-folders` switches without asking). If a different NavAIgate rail is already your sidebar list, it leaves your theme and rail as they are; `--no-look` skips that step altogether. There is no Windows version, because bb runs on macOS and Linux.
 
 **Prefer a bb chat?** Paste: "Run the BB Overlay installer: `curl -fsSL https://raw.githubusercontent.com/skyremote/bb-overlay/main/install.sh | bash`. Then open Home and walk me through Set up."
 
@@ -63,7 +63,7 @@ bb plugin install git:https://github.com/aaronphifer/bb-plugin-agent-board.git@s
 bb plugin install tasks
 ```
 
-Projects & Sections is pinned to 0.6.19, the last release that runs on standard bb. Later releases need VKirill's own build of bb.
+Projects & Sections is pinned to 0.6.19, the last release that runs on standard bb. Later releases need VKirill's own build of bb. Why, and when the pin comes off: [MAINTAINERS.md](MAINTAINERS.md).
 
 Then pick the look in bb: **Settings, Appearance**. Choose the NavAIgate theme and the NavAIgate rail as the thread list. (On bb 0.44 and 0.45 there is also a NavAIgate sidebar header; bb 0.46 removed that option.)
 
@@ -124,6 +124,12 @@ The installer adds two plugins made by other people. They are not part of BB Ove
 It also uses two plugins built into bb: **Tasks** (To-do and the Board; bb ships it but it's opt-in, so the installer adds it) and, if you use it, **Account Pooler** (per-account usage in the dock and the Claude account chip; add your accounts with `bb pool`).
 
 If a companion is missing, the rest still works. Its feature shows greyed out with the line that installs it, for example "Move to folder" says "Install project-folders to use folders", and the last step of Set up lists every companion as installed or missing, with a Copy button for its install line.
+
+## What's new in 1.2.3
+
+- The installer now checks the Projects & Sections you already have. If it's 0.6.20 or later, or it follows a version range (so bb keeps offering 0.6.20 and later as updates), it warns and offers to switch you to 0.6.19, pinned. Your folders are kept, because bb keeps a plugin's data when it is removed. Say yes when it asks, or run it with `--pin-folders` to switch without asking.
+- `--help` now works when you run the script from a file, and the checklist lines up.
+- [MAINTAINERS.md](MAINTAINERS.md) explains why Projects & Sections is pinned, when to lift the pin, and how to test the installer on a throwaway bb.
 
 ## What's new in 1.2.2
 

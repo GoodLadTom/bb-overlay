@@ -79,6 +79,7 @@ Your name and keys are saved only on your Mac, in a hidden folder called `.confi
 - **Home is blank on bb 0.46:** run the installer again to update, then reload with Cmd-R.
 - **"Move to folder" is greyed out:** Projects & Sections isn't installed. Click it to copy the install line, or run the installer again.
 - **Projects & Sections says "no release matching ^0.6.0 runs on this bb":** that's the old install line. Use the 0.6.19 line above, or run the installer again.
+- **Folders stopped working after bb updated Projects & Sections, or bb offers it an update past 0.6.19:** run the installer again and say yes when it offers to switch you to 0.6.19. Your folders are kept.
 - **Anything else:** ask in a bb chat: "NavAIgate Workspace isn't showing X, can you check the plugin?" The agent can read the plugin's logs.
 
 ## The rules, in plain words
