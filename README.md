@@ -6,8 +6,10 @@
 >
 > - Free to download and use, for yourself or for your own business.
 > - Change it as much as you like for your own use.
-> - Don't sell it, re-upload it, share copies of it, or put it in a course, template pack or community (Skool or anywhere else).
-> - Keep the NavAIgate name and logo as they are, and don't present it as your own work.
+> - Your team is covered: your employees and contractors, working for you and under your direction, can use and change your copy for your organisation's work, under your licence.
+> - Contributions are welcome: you can make a public fork, on GitHub or similar, only to send changes back here as pull requests, and keep it public while they're being reviewed. See [CONTRIBUTING.md](CONTRIBUTING.md).
+> - Don't sell it, share copies of it (other than a contribution fork), repackage it as a product, course, template, starter kit or community perk (Skool or anywhere else), or offer it as a hosted service.
+> - Keep the NavAIgate name and logo as they are, don't remove the attribution, and don't present it as your own work.
 > - Want to do something else with it? Ask first: [navaigate.dev](https://navaigate.dev).
 >
 > The legal terms are in [LICENSE](LICENSE) (PolyForm Internal Use 1.0.0) and [NOTICE](NOTICE). If this box and those files ever disagree, the files win.
@@ -111,6 +113,10 @@ These are made by other people and are not part of BB Overlay. Install them only
 - bb's built-in **Account Pooler** (no install; add your accounts with `bb pool`), for per-account usage in the dock and the Claude account chip.
 
 Without them the rail, dock and chips still work; folders and pooled accounts simply don't appear.
+
+## What's new in 1.1.1
+
+- The licence now welcomes contributions: a public fork is allowed for sending pull requests back here, and [CONTRIBUTING.md](CONTRIBUTING.md) has the terms. It also covers your team: your employees and contractors can use your copy for your organisation's work. Nothing changes in the plugins themselves.
 
 ## What's new in 1.1.0
 

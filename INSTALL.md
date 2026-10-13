@@ -71,4 +71,4 @@ Your name and keys are saved only on your Mac, in a hidden folder called `.confi
 
 ## The rules, in plain words
 
-Free for you and your own business. Change it for yourself. Don't sell it, re-upload it, share copies of it, or put it in a course or community. Keep the NavAIgate name and logo. The full terms are in [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Free for you and your own business, and your employees and contractors can use your copy for your work too. Change it for yourself. Don't sell it, share copies of it, or put it in a course or community. Keep the NavAIgate name and logo. Want to help? Fork it only to send a pull request back; the terms are in [CONTRIBUTING.md](CONTRIBUTING.md). The full terms are in [LICENSE](LICENSE) and [NOTICE](NOTICE).
