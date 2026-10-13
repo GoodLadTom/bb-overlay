@@ -4,6 +4,8 @@
 //   Control room  homepageSection           one strip across every harness
 //   ::nav-chart   messageDirective          charts inside replies
 //   Usage dock    experimental_appOverlay   context + plan limits under the chat box
+//   Chips         experimental_appOverlay   hold for sub-agents, Run on / Move to your always-on machine, Claude account, under the chat box
+//   Tabs          experimental_appOverlay   Chrome-style strip of open chats; dock via bb's split
 //
 // Styling follows the GPLS Slate system (NavAIgate-2.0 src/styles/gpls-*.css).
 // Colours come only from host tokens; the bundled NavAIgate theme drives them.
@@ -12,6 +14,9 @@ import { Rail } from "./src/rail";
 import { ControlRoom } from "./src/control-room";
 import { NavChart } from "./src/chart";
 import { UsageDock } from "./src/usage-dock";
+import { ComposerChips } from "./src/composer-chips";
+import { ComposerBridge } from "./src/composer-bridge";
+import { TabStrip } from "./src/tabs";
 import { NavLinks, NavPipeline } from "./src/directives";
 import { AgentsPanel } from "./src/agents";
 import { Boundary } from "./src/boundary";
@@ -44,6 +49,12 @@ export default definePluginApp((app) => {
   app.slots.messageDirective({ id: "nav-links", component: (p) => <Boundary label="Link cards" compact><NavLinks {...p} /></Boundary> });
   app.slots.messageDirective({ id: "nav-pipeline", component: (p) => <Boundary label="Pipeline" compact><NavPipeline {...p} /></Boundary> });
   app.slots.experimental_appOverlay({ id: "usage-dock", component: UsageDock });
+  // Chips in the row under the chat box: hold for sub-agents, your always-on machine, the Claude account.
+  app.slots.experimental_appOverlay({ id: "composer-chips", component: () => <Boundary label="Composer chips" compact><ComposerChips /></Boundary> });
+  // Invisible: hands each composer's API to the chips (draft text, machine picker).
+  app.composer.customize({ id: "chips-bridge", scopes: ["new-thread", "thread"], actions: [{ id: "bridge", component: ComposerBridge }] });
+  // Chrome-style tab strip across the top; docking rides on bb's own split.
+  app.slots.experimental_appOverlay({ id: "tabs", component: () => <Boundary label="Tabs" compact><TabStrip /></Boundary> });
   app.slots.experimental_appOverlay({ id: "new-thread-hero", component: NewThreadHero });
   // Agents: the orchestration space on the right — family map, log, spin up.
   app.slots.threadPanelAction({
@@ -142,8 +153,17 @@ export default definePluginApp((app) => {
       </Boundary>
     ),
   });
-  // NavAIgate mark in bb's sidebar header (choose it in Settings, Appearance).
-  app.slots.experimental_sidebarHeader({ id: "navaigate-header", title: "NavAIgate", description: "The NavAIgate orb and name at the top of the sidebar.", component: HeaderMark });
+  // NavAIgate mark in bb's sidebar header (choose it in Settings, Appearance, on bb 0.44 and 0.45).
+  // bb 0.46 removed the sidebar-header slot (get-bb/bb#5229). Register it only where it
+  // still exists, so newer bb versions don't fail the whole plugin.
+  const slots = app.slots as unknown as Record<string, unknown>;
+  if (typeof slots.experimental_sidebarHeader === "function") {
+    try {
+      app.slots.experimental_sidebarHeader({ id: "navaigate-header", title: "NavAIgate", description: "The NavAIgate orb and name at the top of the sidebar.", component: HeaderMark });
+    } catch {
+      /* slot gone in this bb version */
+    }
+  }
   // Dashboard: any local web app you run, framed as a page in bb (setting: Dashboards).
   app.slots.navPanel({
     id: "dashboard",

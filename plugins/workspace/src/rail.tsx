@@ -4,6 +4,9 @@
 //   inside, every row marked with its harness.
 // Every row has a right-click menu wired to bb's own thread actions; folders
 // have their own. Chats drag onto folders; folders drag onto folders.
+// Rail groups (kept only in rail state) hold whole projects and other groups;
+// project headings drag onto them. Children of chats, folders and groups hang
+// off explorer-style tree guides that turn gold while the branch is running.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent, ReactNode } from "react";
 import {
@@ -29,7 +32,13 @@ import { BulkBar } from "./bulk-bar";
 import { TodoBadge, useFolderTodoCounts } from "./todo";
 import { CloudGlyph, MachineMark, useMachine, useMachineActions, type MachineItem } from "./machine";
 
-const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"];
+/** Lowercase Roman numerals for the top-level sections: 1 -> "i", 14 -> "xiv". */
+function roman(n: number): string {
+  const table: Array<[number, string]> = [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]];
+  let out = "";
+  for (const [v, r] of table) while (n >= v) { out += r; n -= v; }
+  return out;
+}
 const FOLD = 8;
 const NEEDS_FOLD = 4;
 const DRAG_THREAD = "application/x-nav-thread";
@@ -90,6 +99,79 @@ function InlineInput({ initial, placeholder, depth, onSubmit, onCancel }: {
         className="h-7 w-full rounded-md border border-[var(--attention)] bg-background px-2 text-[13px] text-foreground outline-none"
       />
     </div>
+  );
+}
+
+/* ----------------------------- tree guides ----------------------------- */
+
+const GUIDE = "color-mix(in srgb, var(--border) 60%, transparent)";
+
+/**
+ * One child in a tree, with the explorer-style guide drawn beside it: a
+ * vertical line at `x` (under the parent's node) and a tick into this child's
+ * row, or a rounded corner for the last child. Everything is absolutely
+ * placed inside the existing left padding, so rows keep their height and
+ * alignment. `mid` is the vertical centre of the child's own row; `lift`
+ * pulls the first child's line up to meet the parent's node. The guide turns
+ * gold while anything in the branch is running.
+ */
+function Twig({ x, tick, mid, first, last, lift, hot, children }: {
+  x: number;
+  tick: number;
+  mid: number;
+  first: boolean;
+  last: boolean;
+  lift: number;
+  hot: boolean;
+  children: ReactNode;
+}) {
+  const color = hot ? GOLD : GUIDE;
+  const top = first ? -lift : 0;
+  return (
+    <div className="relative">
+      {children}
+      {last ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute rounded-bl-[5px]"
+          style={{ left: x, top, height: mid - top + 1, width: tick, borderLeft: `1px solid ${color}`, borderBottom: `1px solid ${color}` }}
+        />
+      ) : (
+        <>
+          <span aria-hidden className="pointer-events-none absolute w-px" style={{ left: x, top, bottom: 0, background: color }} />
+          <span aria-hidden className="pointer-events-none absolute h-px" style={{ left: x, top: mid, width: tick, background: color }} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Wrap each child of one parent in its Twig. Items carry their own row centre (threads 17, folders 16). */
+function twigs(items: Array<{ key: string; mid: number; el: ReactNode }>, guide: { x: number; tick: number; lift: number; hot: boolean }) {
+  return items.map((it, i) => (
+    <Twig key={it.key} x={guide.x} tick={guide.tick} mid={it.mid} lift={guide.lift} hot={guide.hot} first={i === 0} last={i === items.length - 1}>
+      {it.el}
+    </Twig>
+  ));
+}
+
+/** A small stacked-folders glyph for rail groups (theme colour, no icon-set dependency). */
+function GroupGlyph() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" className="size-3.5 shrink-0 opacity-75" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
+      <path d="M1.5 5.5V3.5a1 1 0 0 1 1-1h3l1.5 1.5h5.5a1 1 0 0 1 1 1" />
+      <path d="M1.5 6.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
+/** An up-and-out arrow for "Move out of group". */
+function OutGlyph() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" className="size-3.5 shrink-0 opacity-75" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.5 13.5H7a2.5 2.5 0 0 1-2.5-2.5V3" />
+      <path d="M1.5 6l3-3 3 3" />
+    </svg>
   );
 }
 
@@ -261,7 +343,7 @@ function ThreadRow({ thread, active, depth, now, onNavigate, moveTargets, onMove
 
 const DRAG_SECTION = "application/x-nav-section";
 
-function Section({ id, label, numeral, count, actions, onDrop, menu, collapsed, onToggle, onReorder, mark, children }: {
+function Section({ id, label, numeral, count, actions, onDrop, menu, collapsed, onToggle, onReorder, onNest, nested, mark, children }: {
   id: string;
   label: string;
   numeral?: string;
@@ -273,10 +355,20 @@ function Section({ id, label, numeral, count, actions, onDrop, menu, collapsed, 
   onToggle: () => void;
   /** Drop another section header here to put it above this one. */
   onReorder: (draggedId: string, beforeId: string) => void;
+  /** Rail groups only: drop a section header on the lower part of the heading to put it inside. */
+  onNest?: (draggedId: string) => void;
+  /** Inside a rail group: no top rule, tighter spacing (the tree guide does the separating). */
+  nested?: boolean;
   mark?: ReactNode;
   children: ReactNode;
 }) {
-  const [over, setOver] = useState<"item" | "section" | null>(null);
+  const [over, setOver] = useState<"item" | "section" | "into" | null>(null);
+  // Upper third of a group heading = "put above"; the rest = "put inside".
+  const zone = (e: DragEvent<HTMLElement>) => {
+    if (!onNest) return "section" as const;
+    const r = e.currentTarget.getBoundingClientRect();
+    return e.clientY - r.top < r.height / 3 ? ("section" as const) : ("into" as const);
+  };
   const heading = (
     <h3
       draggable
@@ -288,13 +380,14 @@ function Section({ id, label, numeral, count, actions, onDrop, menu, collapsed, 
         caps,
         "group relative mx-1 mb-1.5 flex h-6 cursor-pointer select-none items-center justify-between rounded-md",
         over === "item" && "bg-accent",
+        over === "into" && "bg-accent ring-1 ring-[var(--attention)]",
       )}
       onClick={onToggle}
       onDragOver={(e) => {
         const isSection = e.dataTransfer.types.includes(DRAG_SECTION);
         if (!isSection && !onDrop) return;
         e.preventDefault();
-        setOver(isSection ? "section" : "item");
+        setOver(isSection ? zone(e) : "item");
       }}
       onDragLeave={() => setOver(null)}
       onDrop={(e) => {
@@ -302,14 +395,16 @@ function Section({ id, label, numeral, count, actions, onDrop, menu, collapsed, 
         const dragged = e.dataTransfer.getData(DRAG_SECTION);
         if (dragged) {
           e.preventDefault();
-          if (dragged !== id) onReorder(dragged, id);
+          if (dragged === id) return;
+          if (zone(e) === "into" && onNest) onNest(dragged);
+          else onReorder(dragged, id);
           return;
         }
         onDrop?.(e);
       }}
-      title="Click to fold · drag to reorder"
+      title={onNest ? "Click to fold · drag to reorder · drop a project here to put it inside" : "Click to fold · drag to reorder"}
     >
-      {over === "section" ? <span aria-hidden className="absolute -top-2 left-0 right-0 h-[2px] rounded-full" style={{ background: GOLD }} /> : null}
+      {over === "section" ? <span aria-hidden className="absolute -top-1 left-0 right-0 h-[2px] rounded-full" style={{ background: GOLD }} /> : null}
       <span className="flex min-w-0 items-center gap-2">
         <Icon name="ChevronRight" className={cn("size-3 shrink-0 transition-transform", !collapsed && "rotate-90")} />
         {numeral ? (
@@ -327,10 +422,38 @@ function Section({ id, label, numeral, count, actions, onDrop, menu, collapsed, 
     </h3>
   );
   return (
-    <section className="mb-4 border-t border-border pt-3">
+    <section className={nested ? "mb-1 pt-1" : "mb-4 border-t border-border pt-3"}>
       {menu ? <Menu trigger={heading}>{menu}</Menu> : heading}
       {collapsed ? null : children}
     </section>
+  );
+}
+
+/** Shown at the top of an open group while one of its projects or groups is dragged: drop to take it out. */
+function OutStrip({ onDrop }: { onDrop: (draggedId: string) => void }) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAG_SECTION)) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        setOver(false);
+        const dragged = e.dataTransfer.getData(DRAG_SECTION);
+        if (!dragged) return;
+        e.preventDefault();
+        onDrop(dragged);
+      }}
+      className={cn(
+        "mx-1 mb-1.5 flex h-8 items-center justify-center rounded-md border border-dashed text-[12px] transition-colors",
+        over ? "border-[var(--attention)] bg-accent text-foreground" : "border-border text-muted-foreground",
+      )}
+    >
+      Drop here to take it out of the group
+    </div>
   );
 }
 
@@ -350,7 +473,11 @@ function IconButton({ icon, label, onClick }: { icon: string; label: string; onC
 
 /* -------------------------------- rail --------------------------------- */
 
-type Draft = { kind: "new"; projectId: string; parentId: string | null } | { kind: "rename"; folder: Folder };
+type Draft =
+  | { kind: "new"; projectId: string; parentId: string | null }
+  | { kind: "rename"; folder: Folder }
+  | { kind: "group-new"; parentId: string | null; members: string[] }
+  | { kind: "group-rename"; id: string };
 
 export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThreadListProps) {
   const { status, threads, projects } = useSidebarThreads();
@@ -370,6 +497,23 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
   const anchor = useRef<string | null>(null);
   const orderRef = useRef<string[]>([]);
   const [creatingTag, setCreatingTag] = useState<string[] | null>(null);
+  // Which section heading is being dragged, so open groups can offer a "take it out" strip.
+  const [draggingSection, setDraggingSection] = useState<string | null>(null);
+  useEffect(() => {
+    const start = (e: globalThis.DragEvent) => {
+      const id = e.dataTransfer?.types.includes(DRAG_SECTION) ? e.dataTransfer.getData(DRAG_SECTION) : "";
+      if (id) setDraggingSection(id);
+    };
+    const end = () => setDraggingSection(null);
+    window.addEventListener("dragstart", start);
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragstart", start);
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+    };
+  }, []);
   const now = Date.now();
 
   const activeTag = tagFilter && ops.state.tags.some((t) => t.id === tagFilter) ? tagFilter : null;
@@ -457,39 +601,39 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
     }
   };
 
-  const renderThread = (t: PluginSidebarThread, depth: number) => {
-    renderOrder.push(t.id, ...(model.children.get(t.id) ?? []).map((c) => c.id));
+  // Sub-agent chats hang under their parent at every depth, joined by a guide
+  // from the parent's node (thread rows: node centre at 15.5 + depth * 16).
+  const hasRunning = (t: PluginSidebarThread): boolean =>
+    (model.children.get(t.id) ?? []).some((c) => stateOf(c) === "running" || hasRunning(c));
+  const renderThread = (t: PluginSidebarThread, depth: number, child = false): ReactNode => {
+    renderOrder.push(t.id);
+    const kids = model.children.get(t.id) ?? [];
     return (
-    <div key={t.id}>
-      <ThreadRow
-        ctx={rowCtx}
-        thread={t}
-        active={t.id === activeThreadId}
-        depth={depth}
-        now={now}
-        onNavigate={onNavigate}
-        moveTargets={(model.moveTargets.get(t.projectId) ?? []).filter((o) => !o.group)}
-        onMove={(folderId) => folders.placeThread(t.id, t.projectId, folderId).catch(report("Move"))}
-      />
-      {(model.children.get(t.id) ?? []).map((c) => (
+      <div key={t.id}>
         <ThreadRow
-          key={c.id}
           ctx={rowCtx}
-          thread={c}
-          active={c.id === activeThreadId}
-          depth={depth + 1}
+          thread={t}
+          active={t.id === activeThreadId}
+          depth={depth}
           now={now}
           onNavigate={onNavigate}
-          moveTargets={null}
-          onMove={() => undefined}
+          moveTargets={child ? null : (model.moveTargets.get(t.projectId) ?? []).filter((o) => !o.group)}
+          onMove={(folderId) => folders.placeThread(t.id, t.projectId, folderId).catch(report("Move"))}
         />
-      ))}
-    </div>
+        {kids.length > 0
+          ? twigs(
+              kids.map((c) => ({ key: c.id, mid: 17, el: renderThread(c, depth + 1, true) })),
+              { x: 15 + depth * 16, tick: 9, lift: 10, hot: hasRunning(t) },
+            )
+          : null}
+      </div>
     );
   };
 
+  const isDrafting = (projectId: string, parentId: string | null) =>
+    draft?.kind === "new" && draft.projectId === projectId && draft.parentId === parentId;
   const renderDraft = (projectId: string, parentId: string | null, depth: number) =>
-    draft?.kind === "new" && draft.projectId === projectId && draft.parentId === parentId ? (
+    isDrafting(projectId, parentId) ? (
       <InlineInput
         initial=""
         placeholder="Folder name"
@@ -520,6 +664,7 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
     }
     const dirKey = `${f.projectId}:${f.id}`;
     const dirList = dirs[dirKey];
+    const newInside = () => { setCollapsed((c) => ({ ...c, [f.id]: false })); setDraft({ kind: "new", projectId: f.projectId, parentId: f.id }); };
     return (
       <div key={f.id}>
         <FolderRow
@@ -532,10 +677,11 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
           onToggle={() => toggle(f.id)}
           onDrop={onDropInto(f.projectId, f.id)}
           onNewChat={f.kind === "group" ? null : () => { goTo(newChatInFolderUrl(f.projectId, f.id)); onNavigate(); }}
+          onNewFolder={newInside}
           menu={(
             <>
               {f.kind !== "group" ? <MenuItem icon="MessageCirclePlus" label="New chat here" onSelect={() => { goTo(newChatInFolderUrl(f.projectId, f.id)); onNavigate(); }} /> : null}
-              <MenuItem icon="FolderPlus" label="New subfolder" onSelect={() => { setCollapsed((c) => ({ ...c, [f.id]: false })); setDraft({ kind: "new", projectId: f.projectId, parentId: f.id }); }} />
+              <MenuItem icon="FolderPlus" label="New folder inside" onSelect={newInside} />
               <MenuSub icon="Search" label="Add existing subfolder" onOpen={() => loadDirs(f.projectId, f.id)}>
                 <DirectoryItems list={dirList} taken={model.takenPaths} onPick={(d) => folders.createFolder(f.projectId, f.id, d.name, d.relative).catch(report("Add folder"))} />
               </MenuSub>
@@ -554,19 +700,23 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
             </>
           )}
         />
-        {isOpen ? (
-          <>
-            {renderDraft(f.projectId, f.id, depth + 1)}
-            {node.subfolders.map((s) => renderFolder(s, depth + 1))}
-            {node.threads.map((t) => renderThread(t, depth + 1))}
-          </>
-        ) : null}
+        {isOpen
+          ? twigs(
+              [
+                ...(isDrafting(f.projectId, f.id) ? [{ key: "__draft", mid: 17, el: renderDraft(f.projectId, f.id, depth + 1) }] : []),
+                ...node.subfolders.map((sf) => ({ key: sf.id, mid: 16, el: renderFolder(sf, depth + 1) })),
+                ...node.threads.map((t) => ({ key: t.id, mid: 17, el: renderThread(t, depth + 1) })),
+              ],
+              // Folder rows: chevron centre at 13 + depth * 16.
+              { x: 13 + depth * 16, tick: 10, lift: 8, hot: node.live },
+            )
+          : null}
       </div>
     );
   };
 
   type Group = (typeof model.groups)[number];
-  const renderGroup = (g: Group, sid: string, numeral?: string) => {
+  const renderGroup = (g: Group, sid: string, numeral: string | undefined, nested: boolean) => {
     const label = g.project ? (g.project.isPersonal ? "Personal" : g.project.name) : "Other";
     const canFolder = folders.available && g.hasRoot;
     const open = !!expanded[g.id] || g.loose.length <= FOLD + 2;
@@ -579,6 +729,7 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
         id={sid}
         label={label}
         numeral={numeral}
+        nested={nested}
         count={g.total}
         collapsed={isCollapsed}
         onToggle={() => ops.setCollapsed(sid, !isCollapsed)}
@@ -602,7 +753,8 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
               </MenuSub>
             ) : null}
             <MenuSeparator />
-            <MenuItem icon="ChevronsUp" label="Move section to top" onSelect={() => { const first = sections[0]?.id; if (first && first !== sid) reorder(sid, first); }} />
+            <MenuItem icon="ChevronsUp" label="Move to top of list" onSelect={() => toTop(sid)} />
+            {groupMenu(sid)}
             <MenuItem icon={isCollapsed ? "ChevronsDown" : "ChevronsUp"} label={isCollapsed ? "Unfold section" : "Fold section"} onSelect={() => ops.setCollapsed(sid, !isCollapsed)} />
             {canFolder ? <MenuItem icon="ChevronsUp" label="Collapse all folders" onSelect={() => setCollapsed((c) => ({ ...c, ...Object.fromEntries(g.allFolderIds.map((id) => [id, true])) }))} /> : null}
             {canFolder ? <MenuItem icon="ChevronsDown" label="Expand all folders" onSelect={() => setCollapsed((c) => ({ ...c, ...Object.fromEntries(g.allFolderIds.map((id) => [id, false])) }))} /> : null}
@@ -634,7 +786,8 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
   };
 
   const collapsedSet = new Set(ops.state.collapsed);
-  const sections: Array<{ id: string; el: (numeral?: string) => ReactNode }> = [];
+  type Entry = { id: string; el: (numeral: string | undefined, nested: boolean) => ReactNode; live: boolean; count: number };
+  const sections: Entry[] = [];
 
   if (model.later.length > 0) {
     sections.push({
@@ -653,6 +806,8 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
           {model.later.map((t) => renderThread(t, 0))}
         </Section>
       ),
+      live: false,
+      count: model.later.length,
     });
   }
   if (model.needs.length > 0) {
@@ -673,6 +828,8 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
           <More shown={expanded.__needs ? model.needs.length : Math.min(NEEDS_FOLD, model.needs.length)} total={model.needs.length} open={!!expanded.__needs} onToggle={() => setExpanded((o) => ({ ...o, __needs: !o.__needs }))} />
         </Section>
       ),
+      live: false,
+      count: model.needs.length,
     });
   }
   if (model.pinned.length > 0) {
@@ -691,88 +848,309 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
           {model.pinned.map((t) => renderThread(t, 0))}
         </Section>
       ),
+      live: false,
+      count: model.pinned.length,
     });
   }
   for (const g of model.groups) {
     const sid = `project:${g.id}`;
-    sections.push({ id: sid, el: (numeral) => renderGroup(g, sid, numeral) });
+    sections.push({
+      id: sid,
+      el: (numeral, nested) => renderGroup(g, sid, numeral, nested),
+      live: model.running.some((t) => t.projectId === g.id),
+      count: g.total,
+    });
   }
+
+  // Rail groups: the member's own folders of projects, kept only in rail state.
+  const railGroups = ops.state.groups;
+  const groupIds = new Set(railGroups.map((x) => x.id));
+  const parentOf = (id: string): string | null => {
+    if (!id.startsWith("project:") && !id.startsWith("group:")) return null;
+    const gid = ops.state.within[id];
+    return gid && groupIds.has(gid) ? `group:${gid}` : null;
+  };
+  /** The chain of groups above a section, nearest first (stops on a loop, which the server never writes). */
+  const ancestors = (id: string): string[] => {
+    const out: string[] = [];
+    for (let cur = parentOf(id); cur && !out.includes(cur); cur = parentOf(cur)) out.push(cur);
+    return out;
+  };
+  const isWithin = (id: string, ancestor: string) => id === ancestor || ancestors(id).includes(ancestor);
+  const entries = new Map<string, Entry>(sections.map((x) => [x.id, x]));
+  const childrenOf = (parent: string | null) => [...entries.values()].filter((x) => (parentOf(x.id) ?? null) === parent).sort((a, b) => rank(a.id) - rank(b.id));
+  const liveOf = (id: string): boolean => {
+    const e = entries.get(id);
+    return id.startsWith("group:") ? childrenOf(id).some((c) => liveOf(c.id)) : !!e?.live;
+  };
+  const countOf = (id: string): number => (id.startsWith("group:") ? childrenOf(id).reduce((n, c) => n + countOf(c.id), 0) : entries.get(id)?.count ?? 0);
 
   // the member's saved order first; anything new keeps its natural place after.
   const saved = ops.state.order;
-  const natural = sections.map((x) => x.id);
-  const rank = (id: string) => {
+  const natural = [...sections.map((x) => x.id), ...railGroups.map((x) => `group:${x.id}`)];
+  // A group not yet in the saved order sits where its first project sits.
+  const ranks = new Map<string, number>();
+  const rank = (id: string): number => {
+    const known = ranks.get(id);
+    if (known !== undefined) return known;
+    ranks.set(id, Number.MAX_SAFE_INTEGER); // guards a loop the server never writes
     const i = saved.indexOf(id);
-    return i >= 0 ? i : saved.length + natural.indexOf(id);
+    let r = i >= 0 ? i : saved.length + natural.indexOf(id);
+    if (i < 0 && id.startsWith("group:")) {
+      const inside = [...entries.keys()].filter((x) => parentOf(x) === id).map(rank);
+      if (inside.length > 0) r = Math.min(...inside) - 0.5;
+    }
+    ranks.set(id, r);
+    return r;
   };
-  sections.sort((a, b) => rank(a.id) - rank(b.id));
+  const flatIds = (parent: string | null = null): string[] => childrenOf(parent).flatMap((x) => [x.id, ...flatIds(x.id)]);
+  /** The new order, keeping saved ids that are not on screen right now (filtered or empty projects). */
+  const withHidden = (ids: string[]) => [...ids, ...saved.filter((x) => !ids.includes(x))].slice(0, 200);
+
   function reorder(dragged: string, before: string) {
-    const ids = sections.map((x) => x.id).filter((x) => x !== dragged);
-    const at = ids.indexOf(before);
+    const nestable = /^(project|group):/.test(dragged);
+    let target = before;
+    // Needs you, Pinned and Come back later always stay at the top level.
+    if (!nestable) for (let up = parentOf(target); up; up = parentOf(target)) target = up;
+    const into = nestable ? parentOf(target) : null;
+    if (into && isWithin(into, dragged)) return void toast.error("A group cannot go inside itself.");
+    const ids = flatIds().filter((x) => x !== dragged);
+    const at = ids.indexOf(target);
     ids.splice(at < 0 ? ids.length : at, 0, dragged);
-    void ops.setOrder(ids);
+    if (nestable && parentOf(dragged) !== into) void ops.placeInGroup([dragged], into ? into.slice(6) : null, withHidden(ids));
+    else void ops.setOrder(withHidden(ids));
+  }
+  function nest(dragged: string, groupSid: string) {
+    if (!/^(project|group):/.test(dragged)) return void toast.error("Only projects and groups go inside a group.");
+    if (isWithin(groupSid, dragged)) return void toast.error("A group cannot go inside itself.");
+    // Lands at the end of the group.
+    const ids = flatIds().filter((x) => x !== dragged);
+    let at = ids.indexOf(groupSid);
+    while (at >= 0 && at + 1 < ids.length && isWithin(ids[at + 1], groupSid)) at++;
+    ids.splice(at + 1, 0, dragged);
+    void ops.placeInGroup([dragged], groupSid.slice(6), withHidden(ids));
+    if (collapsedSet.has(groupSid)) ops.setCollapsed(groupSid, false);
+  }
+  function toTop(sid: string) {
+    const first = childrenOf(parentOf(sid))[0]?.id;
+    if (first && first !== sid) reorder(sid, first);
+  }
+  /** Every rail group as a flat, indented list, for the "Move to group" menus. */
+  const groupOptions = (): Array<{ sid: string; name: string; depth: number }> => {
+    const out: Array<{ sid: string; name: string; depth: number }> = [];
+    const walk = (parent: string | null, depth: number) => {
+      for (const g of railGroups.filter((x) => parentOf(`group:${x.id}`) === parent).sort((a, b) => rank(`group:${a.id}`) - rank(`group:${b.id}`))) {
+        out.push({ sid: `group:${g.id}`, name: g.name, depth });
+        walk(`group:${g.id}`, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  };
+  /** Take a section out of its group: one level up, or straight to the top level. Lands just above the group it left. */
+  function moveOut(sid: string, toTopLevel: boolean) {
+    const chain = ancestors(sid);
+    if (chain.length === 0) return;
+    reorder(sid, toTopLevel ? chain[chain.length - 1] : chain[0]);
+  }
+  /** "Move out of group" (and "Out to the top level" when nested deeper), then the Move to group submenu. */
+  function groupMenu(sid: string) {
+    const here = parentOf(sid);
+    const depth = ancestors(sid).length;
+    const options = groupOptions().filter((o) => !isWithin(o.sid, sid));
+    return (
+      <>
+        {here ? <MenuItem lead={<OutGlyph />} label="Move out of group" hint={depth > 1 ? "one level up" : undefined} onSelect={() => moveOut(sid, false)} /> : null}
+        {depth > 1 ? <MenuItem icon="ChevronsUp" label="Out to the top level" onSelect={() => moveOut(sid, true)} /> : null}
+      <MenuSub lead={<GroupGlyph />} label="Move to group">
+        {options.map((o) => (
+          <MenuItem key={o.sid} lead={<GroupGlyph />} label={`${"  ".repeat(o.depth)}${o.name}`} checked={o.sid === here} onSelect={() => (o.sid === here ? undefined : nest(sid, o.sid))} />
+        ))}
+        {options.length > 0 ? <MenuSeparator /> : null}
+        <MenuItem icon="Plus" label="New group…" onSelect={() => setDraft({ kind: "group-new", parentId: here ? here.slice(6) : null, members: [sid] })} />
+      </MenuSub>
+      </>
+    );
+  }
+  const groupDraft = (parentId: string | null, depth: number) =>
+    draft?.kind === "group-new" && draft.parentId === parentId ? (
+      <InlineInput
+        key="__group-draft"
+        initial=""
+        placeholder="Group name"
+        depth={depth}
+        onCancel={() => setDraft(null)}
+        onSubmit={(name) => {
+          const members = draft.members;
+          setDraft(null);
+          void ops.createGroup(name.slice(0, 48), parentId, members).then((g) => {
+            if (g) toast.success(members.length > 0 ? `Moved into ${g.name}` : `Created ${g.name}`);
+          });
+        }}
+      />
+    ) : null;
+
+  for (const g of railGroups) {
+    const sid = `group:${g.id}`;
+    sections.push({
+      id: sid,
+      live: false,
+      count: 0,
+      el: (numeral, nested) => {
+        const isCollapsed = collapsedSet.has(sid);
+        const kids = level(sid, numeral ?? null);
+        const hint = kids.length === 0 && !(draft?.kind === "group-new" && draft.parentId === g.id);
+        if (draft?.kind === "group-rename" && draft.id === g.id) {
+          return (
+            <section key={sid} className={nested ? "mb-1 pt-1" : "mb-4 border-t border-border pt-3"}>
+              <InlineInput
+                initial={g.name}
+                placeholder="Group name"
+                depth={0}
+                onCancel={() => setDraft(null)}
+                onSubmit={(name) => { setDraft(null); void ops.renameGroup(g.id, name.slice(0, 48)); }}
+              />
+            </section>
+          );
+        }
+        return (
+          <Section
+            key={sid}
+            id={sid}
+            label={g.name}
+            numeral={numeral}
+            nested={nested}
+            mark={<GroupGlyph />}
+            count={countOf(sid)}
+            collapsed={isCollapsed}
+            onToggle={() => ops.setCollapsed(sid, !isCollapsed)}
+            onReorder={reorder}
+            onNest={(dragged) => nest(dragged, sid)}
+            menu={
+              <>
+                <MenuLabel>{g.name}</MenuLabel>
+                <MenuItem lead={<GroupGlyph />} label="New group inside" onSelect={() => { if (isCollapsed) ops.setCollapsed(sid, false); setDraft({ kind: "group-new", parentId: g.id, members: [] }); }} />
+                <MenuItem icon="Edit" label="Rename" onSelect={() => setDraft({ kind: "group-rename", id: g.id })} />
+                <MenuSeparator />
+                <MenuItem icon="ChevronsUp" label="Move to top of list" onSelect={() => toTop(sid)} />
+                {groupMenu(sid)}
+                <MenuItem icon={isCollapsed ? "ChevronsDown" : "ChevronsUp"} label={isCollapsed ? "Unfold group" : "Fold group"} onSelect={() => ops.setCollapsed(sid, !isCollapsed)} />
+                <MenuSeparator />
+                <MenuItem icon="Trash2" label="Delete group" hint="keeps its projects" danger onSelect={() => void ops.deleteGroup(g.id)} />
+              </>
+            }
+          >
+            {draggingSection && draggingSection !== sid && isWithin(draggingSection, sid) ? (
+              <OutStrip onDrop={(dragged) => reorder(dragged, sid)} />
+            ) : null}
+            {twigs(
+              [
+                ...(draft?.kind === "group-new" && draft.parentId === g.id ? [{ key: "__group-draft", mid: 17, el: <div style={{ paddingLeft: 16 }}>{groupDraft(g.id, 0)}</div> }] : []),
+                ...kids.map((k) => ({ key: k.id, mid: 16, el: <div style={{ paddingLeft: 16 }}>{k.node}</div> })),
+              ],
+              // Group headings: chevron centre at 10 inside the section.
+              { x: 10, tick: 9, lift: 14, hot: liveOf(sid) },
+            )}
+            {hint ? (
+              <p className="mb-1 ml-[20px] mr-1 flex min-h-8 py-1 items-center rounded-md border border-dashed border-border px-2.5 text-[12px] text-muted-foreground">
+                Drag a project heading here, or right-click one and choose Move to group. Right-click anything inside to move it out.
+              </p>
+            ) : null}
+          </Section>
+        );
+      },
+    });
+    entries.set(sid, sections[sections.length - 1]);
   }
 
-  let projectIndex = 0;
-  const body = sections.map((x) => x.el(x.id.startsWith("project:") ? ROMAN[projectIndex++] : undefined));
+  /** One level of the rail: top level numbered i, ii, iii; inside a group i.1, i.2, then i.1.1. */
+  function level(parent: string | null, prefix: string | null): Array<{ id: string; node: ReactNode }> {
+    let k = 0;
+    return childrenOf(parent).map((x) => {
+      const numbered = x.id.startsWith("project:") || x.id.startsWith("group:");
+      const n = numbered ? (prefix ? `${prefix}.${++k}` : roman(++k)) : undefined;
+      return { id: x.id, node: x.el(n, parent !== null) };
+    });
+  }
+
+  const body = level(null, null).map((x) => x.node);
   orderRef.current = renderOrder;
 
   const selectedThreads = threads.filter((t) => selected.has(t.id));
 
+  // Right-click anywhere on the rail that has no menu of its own: New group.
   return (
-    <div className="px-2 pb-6 pt-2">
-      <NowCard running={model.running} needs={model.allNeeds} onNavigate={onNavigate} />
-      <HarnessFilter
-        counts={model.counts}
-        value={harness}
-        onChange={setHarness}
-        extra={
-          <button
-            type="button"
-            aria-pressed={selecting}
-            title="Select several chats (or ⌘-click, ⇧-click)"
-            onClick={() => (selecting ? clearSelection() : setSelecting(true))}
-            className={cn(
-              "ml-auto inline-flex h-7 items-center gap-1.5 rounded-full px-2 text-[12px] transition-colors",
-              selecting ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Icon name="ListTodo" className="size-3.5" />
-            {selecting ? "Done" : "Select"}
-          </button>
-        }
-      />
-      <TagFilter
-        ops={ops}
-        counts={model.tagCounts}
-        value={activeTag}
-        onChange={setTagFilter}
-        creating={creatingTag !== null}
-        setCreating={(v) => setCreatingTag(v ? [] : null)}
-        onCreated={(tag) => {
-          if (creatingTag && creatingTag.length > 0) void ops.applyTag(creatingTag, tag.id, true);
-          setCreatingTag(null);
-        }}
-      />
+    <Menu
+      trigger={
+        <div className="min-h-full px-2 pb-6 pt-2">
+          <NowCard running={model.running} needs={model.allNeeds} onNavigate={onNavigate} />
+          <HarnessFilter
+            counts={model.counts}
+            value={harness}
+            onChange={setHarness}
+            extra={
+              <button
+                type="button"
+                aria-pressed={selecting}
+                title="Select several chats (or ⌘-click, ⇧-click)"
+                onClick={() => (selecting ? clearSelection() : setSelecting(true))}
+                className={cn(
+                  "ml-auto inline-flex h-7 items-center gap-1.5 rounded-full px-2 text-[12px] transition-colors",
+                  selecting ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon name="ListTodo" className="size-3.5" />
+                {selecting ? "Done" : "Select"}
+              </button>
+            }
+          />
+          <TagFilter
+            ops={ops}
+            counts={model.tagCounts}
+            value={activeTag}
+            onChange={setTagFilter}
+            creating={creatingTag !== null}
+            setCreating={(v) => setCreatingTag(v ? [] : null)}
+            onCreated={(tag) => {
+              if (creatingTag && creatingTag.length > 0) void ops.applyTag(creatingTag, tag.id, true);
+              setCreatingTag(null);
+            }}
+          />
 
-      {body}
+          {groupDraft(null, 0)}
+          {body}
+          {model.groups.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setDraft({ kind: "group-new", parentId: null, members: [] })}
+              className="mx-1 mt-1 inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground"
+              title="A group holds whole projects. It lives only in this rail; nothing changes on disk."
+            >
+              <GroupGlyph />
+              New group
+            </button>
+          ) : null}
 
-      {sections.length === 0 ? (
-        <p className="mx-1 border-t border-border pt-3 text-[12px] text-muted-foreground">Nothing matches this filter.</p>
-      ) : null}
-      {!folders.available ? (
-        <p className="mx-1 mt-2 text-[11px] text-muted-foreground">Folders need the project-folders plugin.</p>
-      ) : null}
-      {selected.size > 0 ? (
-        <BulkBar
-          ids={[...selected]}
-          pinnedAll={selectedThreads.length > 0 && selectedThreads.every((t) => t.isPinned)}
-          ops={ops}
-          onClear={clearSelection}
-          onNewTag={() => setCreatingTag([...selected])}
-        />
-      ) : null}
-    </div>
+          {model.groups.length === 0 && model.later.length + model.needs.length + model.pinned.length === 0 ? (
+            <p className="mx-1 border-t border-border pt-3 text-[12px] text-muted-foreground">Nothing matches this filter.</p>
+          ) : null}
+          {!folders.available ? (
+            <p className="mx-1 mt-2 text-[11px] text-muted-foreground">Folders need the project-folders plugin.</p>
+          ) : null}
+          {selected.size > 0 ? (
+            <BulkBar
+              ids={[...selected]}
+              pinnedAll={selectedThreads.length > 0 && selectedThreads.every((t) => t.isPinned)}
+              ops={ops}
+              onClear={clearSelection}
+              onNewTag={() => setCreatingTag([...selected])}
+            />
+          ) : null}
+        </div>
+      }
+    >
+      <MenuItem lead={<GroupGlyph />} label="New group" hint="holds projects" onSelect={() => setDraft({ kind: "group-new", parentId: null, members: [] })} />
+    </Menu>
   );
 }
 
@@ -841,7 +1219,7 @@ function DirectoryItems({ list, taken, onPick }: { list: Directory[] | "loading"
   );
 }
 
-function FolderRow({ folder, depth, open, count, live, todos, onToggle, onDrop, onNewChat, menu }: {
+function FolderRow({ folder, depth, open, count, live, todos, onToggle, onDrop, onNewChat, onNewFolder, menu }: {
   folder: Folder;
   depth: number;
   open: boolean;
@@ -851,6 +1229,7 @@ function FolderRow({ folder, depth, open, count, live, todos, onToggle, onDrop, 
   onToggle: () => void;
   onDrop: (e: DragEvent<HTMLElement>) => void;
   onNewChat: (() => void) | null;
+  onNewFolder: () => void;
   menu: ReactNode;
 }) {
   const [over, setOver] = useState(false);
@@ -883,6 +1262,7 @@ function FolderRow({ folder, depth, open, count, live, todos, onToggle, onDrop, 
       {live ? <Lattice cell={2} gap={1} label="Something in here is working" /> : null}
       <TodoBadge n={todos} />
       <span className="flex items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+        <IconButton icon="FolderPlus" label={`New folder inside ${folder.name}`} onClick={onNewFolder} />
         {onNewChat ? <IconButton icon="MessageCirclePlus" label={`New chat in ${folder.name}`} onClick={onNewChat} /> : null}
       </span>
       <span className="w-5 shrink-0 text-right text-[11px] font-normal text-muted-foreground" style={tnum}>{count || ""}</span>

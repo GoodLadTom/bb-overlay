@@ -9,6 +9,7 @@ import type { RailState, rpcContract } from "../server";
 export type { RailState };
 export type Tag = RailState["tags"][number];
 export type TagColor = Tag["color"];
+export type RailGroup = RailState["groups"][number];
 export type LaterReason = "revisit" | "done" | "mistake";
 
 export const TAG_COLORS: TagColor[] = ["gold", "ink", "green", "red", "plum", "teal", "sand"];
@@ -24,7 +25,7 @@ export const TAG_CSS: Record<TagColor, string> = {
   sand: "var(--input)",
 };
 
-const EMPTY: RailState = { tags: [], assign: {}, later: {}, order: [], collapsed: [] };
+const EMPTY: RailState = { tags: [], assign: {}, later: {}, order: [], collapsed: [], groups: [], within: {} };
 
 const fail = (verb: string) => (e: unknown) => {
   toast.error(`${verb} failed`, { description: e instanceof Error ? e.message : String(e) });
@@ -57,6 +58,34 @@ export function useRailState() {
     setCollapsed: (id: string, collapsed: boolean) => {
       setState((s) => ({ ...s, collapsed: collapsed ? [...new Set([...s.collapsed, id])] : s.collapsed.filter((x) => x !== id) }));
       void apply(rpc.call("collapsed_set", { id, collapsed }), "Collapse");
+    },
+    createGroup: (name: string, parentId: string | null, members?: string[]) =>
+      rpc.call("group_create", { name, parentId, members }).then(
+        (g) => {
+          refetch();
+          return g;
+        },
+        (e) => {
+          fail("New group")(e);
+          return null;
+        },
+      ),
+    renameGroup: (id: string, name: string) => apply(rpc.call("group_update", { id, name }), "Rename group"),
+    deleteGroup: (id: string) => apply(rpc.call("group_delete", { id }), "Delete group"),
+    /** Move sections into a group (null = top level), optionally saving a new order in the same write. */
+    placeInGroup: (ids: string[], groupId: string | null, order?: string[]) => {
+      setState((s) => {
+        const within = { ...s.within };
+        for (const id of ids) {
+          if (groupId) within[id] = groupId;
+          else delete within[id];
+        }
+        return { ...s, within, order: order ?? s.order };
+      });
+      return rpc.call("group_place", { ids, groupId, order }).then(setState, (e) => {
+        fail("Move to group")(e);
+        refetch();
+      });
     },
     forget: (threadIds: string[]) => apply(rpc.call("forget_threads", { threadIds }), "Tidy up"),
   };

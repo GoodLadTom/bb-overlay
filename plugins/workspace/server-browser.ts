@@ -7,14 +7,32 @@ import path from "node:path";
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+// A Chromium-family browser (Firefox and Safari don't offer the DevTools port this needs).
+// NAVAIGATE_BROWSER overrides the search; otherwise the usual macOS apps, then the usual
+// command names on PATH (Linux).
+const MAC_APPS = [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+  "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+];
+const COMMANDS = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "brave-browser", "microsoft-edge"];
+function findBrowser(): string | null {
+  const override = process.env.NAVAIGATE_BROWSER?.trim();
+  if (override) return fs.existsSync(override) ? override : null;
+  for (const app of MAC_APPS) if (fs.existsSync(app)) return app;
+  const dirs = [...(process.env.PATH ?? "").split(":"), "/usr/bin", "/usr/local/bin", "/snap/bin", "/opt/homebrew/bin"].filter(Boolean);
+  for (const cmd of COMMANDS) for (const d of dirs) if (fs.existsSync(path.join(d, cmd))) return path.join(d, cmd);
+  return null;
+}
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Evaluate = (expression: string) => Promise<unknown>;
 
 async function withHeadless<T>(startUrl: string, fn: (evaluate: Evaluate) => Promise<T>, budgetMs = 45_000): Promise<T> {
-  if (!fs.existsSync(CHROME)) throw new Error("Google Chrome is not installed");
+  const CHROME = findBrowser();
+  if (!CHROME) throw new Error("No Chrome-family browser found (Chrome, Chromium, Brave or Edge). Install one, or set NAVAIGATE_BROWSER to its path.");
   const WS = (globalThis as { WebSocket?: typeof WebSocket }).WebSocket;
   if (!WS) throw new Error("no WebSocket in this runtime");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "nav-audience-"));

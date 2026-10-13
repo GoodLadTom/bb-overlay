@@ -25,21 +25,33 @@ import { HARNESSES, askLogOutput, askRouteInput, askRouteOutput, createAsk } fro
 import { createMachine, handOff, machineHandoffInput, machineHandoffOutput, machineLog, machineLogOutput, machineStateSchema, machineTell } from "./server-machine";
 import { createWhere, machineAnswers, whereSchema } from "./server-where";
 import { KEY_NAMES, keyStatus, profile, profileSchema, saveKeys, saveProfile, testKey } from "./server-profile";
+import { poolList, poolListSchema, poolPutFirst } from "./server-pool";
+import { createMachines, hostMachineSchema } from "./server-machines";
+import { createHolds, holdStateSchema } from "./server-hold";
+import { createTeleport, teleportLinkSchema, teleportMoveInput, teleportMoveOutput } from "./server-teleport";
 
 // ---- Rail state: tags, "come back later" marks, section order (synced via bb) ----
 
 const TAG_COLORS = ["gold", "ink", "green", "red", "plum", "teal", "sand"] as const;
 const tagSchema = z.object({ id: z.string(), name: z.string().min(1).max(32), color: z.enum(TAG_COLORS) });
 const laterSchema = z.object({ reason: z.enum(["revisit", "done", "mistake"]), at: z.number() });
+// Rail groups: the member's own folders that hold whole projects (and other
+// groups). They live only here, so nothing changes on disk or in bb itself.
+// `within` maps a section id ("project:<id>" or "group:<id>") to its group id.
+// Both fields default, so state saved before groups existed loads unchanged.
+const groupSchema = z.object({ id: z.string(), name: z.string().min(1).max(48) });
+const sectionId = z.string().min(1).max(80).regex(/^(project|group):/);
 const stateSchema = z.object({
   tags: z.array(tagSchema),
   assign: z.record(z.string(), z.array(z.string())),
   later: z.record(z.string(), laterSchema),
   order: z.array(z.string()),
   collapsed: z.array(z.string()),
+  groups: z.array(groupSchema).default([]),
+  within: z.record(z.string(), z.string()).default({}),
 });
 export type RailState = z.infer<typeof stateSchema>;
-const EMPTY: RailState = { tags: [], assign: {}, later: {}, order: [], collapsed: [] };
+const EMPTY: RailState = { tags: [], assign: {}, later: {}, order: [], collapsed: [], groups: [], within: {} };
 const ids = z.array(z.string().min(1).max(64)).min(1).max(200);
 
 export const rpcContract = defineRpcContract({
@@ -51,10 +63,22 @@ export const rpcContract = defineRpcContract({
   machine_tell: { input: z.object({ threadId: z.string().min(1), text: z.string().trim().min(1).max(20_000) }), output: z.object({ ok: z.boolean() }) },
   machine_test: { input: z.object({ sshHost: z.string().trim().min(1).max(120) }), output: z.object({ ok: z.boolean(), message: z.string() }) },
   where_now: { input: z.null(), output: whereSchema },
+  // The always-on machine as a second machine of this bb: its host and this project's checkout there.
+  machine_host: { input: z.object({ projectId: z.string().min(1).nullable() }), output: hostMachineSchema },
+  machine_host_link: { input: z.object({ projectId: z.string().min(1) }), output: hostMachineSchema },
+  // Hold a message until the chat's sub-agents finish.
+  hold_state: { input: z.object({ threadId: z.string().min(1) }), output: holdStateSchema },
+  hold_create: { input: z.object({ threadId: z.string().min(1), text: z.string().trim().min(1).max(100_000) }), output: holdStateSchema },
+  hold_cancel: { input: z.object({ threadId: z.string().min(1) }), output: z.object({ text: z.string().nullable() }) },
+  // Teleport-lite: move a chat to the always-on machine and back (a brief, since bb cannot fork across machines).
+  teleport_link: { input: z.object({ threadId: z.string().min(1) }), output: teleportLinkSchema },
+  teleport_move: { input: teleportMoveInput, output: teleportMoveOutput },
+  teleport_back: { input: z.object({ threadId: z.string().min(1) }), output: teleportMoveOutput },
   profile_get: { input: z.null(), output: profileSchema },
   profile_save: { input: profileSchema, output: profileSchema },
   keys_status: { input: z.null(), output: z.record(z.enum(KEY_NAMES), z.boolean()) },
-  keys_save: { input: z.record(z.enum(KEY_NAMES), z.string().max(400)), output: z.record(z.enum(KEY_NAMES), z.boolean()) },
+  // Partial: Set up sends only the keys the member entered (any number from none to all).
+  keys_save: { input: z.partialRecord(z.enum(KEY_NAMES), z.string().max(400)), output: z.record(z.enum(KEY_NAMES), z.boolean()) },
   keys_test: { input: z.object({ name: z.enum(KEY_NAMES), value: z.string().max(400) }), output: z.object({ ok: z.boolean(), message: z.string() }) },
   tag_create: { input: z.object({ name: z.string().trim().min(1).max(32), color: z.enum(TAG_COLORS) }), output: tagSchema },
   tag_update: { input: z.object({ id: z.string(), name: z.string().trim().min(1).max(32).optional(), color: z.enum(TAG_COLORS).optional() }), output: stateSchema },
@@ -64,6 +88,16 @@ export const rpcContract = defineRpcContract({
   order_set: { input: z.object({ order: z.array(z.string().max(80)).max(200) }), output: stateSchema },
   collapsed_set: { input: z.object({ id: z.string().max(80), collapsed: z.boolean() }), output: stateSchema },
   forget_threads: { input: z.object({ threadIds: ids }), output: stateSchema },
+  group_create: {
+    input: z.object({ name: z.string().trim().min(1).max(48), parentId: z.string().nullable(), members: z.array(sectionId).max(50).optional() }),
+    output: groupSchema,
+  },
+  group_update: { input: z.object({ id: z.string(), name: z.string().trim().min(1).max(48) }), output: stateSchema },
+  group_delete: { input: z.object({ id: z.string() }), output: stateSchema },
+  group_place: {
+    input: z.object({ ids: z.array(sectionId).min(1).max(50), groupId: z.string().nullable(), order: z.array(z.string().max(80)).max(200).optional() }),
+    output: stateSchema,
+  },
   todo_list: { input: z.null(), output: z.object({ items: z.array(todoItemSchema), available: z.boolean() }) },
   todo_add: {
     input: z.object({
@@ -118,6 +152,9 @@ export const rpcContract = defineRpcContract({
     input: z.object({ provider: z.enum(["claude", "codex"]), sessionId: z.string().max(200).nullable() }),
     output: z.object({ accountId: z.string().nullable(), activeAccountId: z.string().nullable() }),
   },
+  // Claude accounts for the account chip: list, and put one first in the failover order.
+  pool_list: { input: z.null(), output: poolListSchema },
+  pool_put_first: { input: z.object({ accountId: z.string().uuid() }), output: poolListSchema },
 });
 
 function poolDbPath(): string {
@@ -166,6 +203,17 @@ export default async function plugin(bb: BbPluginApi) {
     return next;
   };
 
+  /** Put a project or group section inside `groupId` (null = top level); a group can never go inside itself. */
+  const placeIn = (s: RailState, member: string, groupId: string | null) => {
+    if (!groupId) {
+      delete s.within[member];
+      return;
+    }
+    for (let cur: string | undefined = groupId; cur; cur = s.within[`group:${cur}`])
+      if (`group:${cur}` === member) throw new Error("A group cannot go inside itself.");
+    s.within[member] = groupId;
+  };
+
   const todo = createTodoEngine(bb);
   const voice = createVoice(bb);
   const home = createHome(bb, voice.settings as unknown as { get(): Promise<Record<string, unknown>> });
@@ -177,6 +225,9 @@ export default async function plugin(bb: BbPluginApi) {
   const audience = createAudience(bb, voice.settings as unknown as Parameters<typeof createAudience>[1]);
   const machine = createMachine(bb);
   const where = createWhere();
+  const machines = createMachines(bb);
+  const holds = createHolds(bb);
+  const teleport = createTeleport(bb, machines);
   const ok = { ok: true };
 
   /** A service stops at once on reload, even while its current pass waits on the network. */
@@ -266,6 +317,18 @@ export default async function plugin(bb: BbPluginApi) {
     machine_state: () => machine.get(),
     machine_refresh: () => machine.refresh(),
     where_now: () => where.where(),
+    machine_host: ({ projectId }) => machines.forProject(projectId),
+    machine_host_link: ({ projectId }) => machines.link(projectId),
+    hold_state: ({ threadId }) => holds.state(threadId),
+    hold_create: ({ threadId, text }) => holds.create(threadId, text),
+    hold_cancel: ({ threadId }) => holds.cancel(threadId),
+    teleport_link: ({ threadId }) => teleport.getLink(threadId),
+    teleport_move: async (input) => {
+      const res = await teleport.move(input);
+      if (res.via === "handoff") await machine.refresh();
+      return res;
+    },
+    teleport_back: ({ threadId }) => teleport.back(threadId),
     machine_log: ({ threadId }) => machineLog(threadId),
     machine_tell: ({ threadId, text }) => machineTell(threadId, text),
     machine_handoff: async (input) => {
@@ -384,6 +447,52 @@ export default async function plugin(bb: BbPluginApi) {
           delete s.later[id];
         }
       }),
+    group_create: async ({ name, parentId, members }) => {
+      const group = { id: `g_${randomUUID().slice(0, 8)}`, name };
+      await mutate((s) => {
+        if (s.groups.length >= 60) throw new Error("Group limit reached (60).");
+        if (parentId && !s.groups.some((g) => g.id === parentId)) throw new Error("Group not found.");
+        s.groups.push(group);
+        if (parentId) s.within[`group:${group.id}`] = parentId;
+        for (const m of members ?? []) placeIn(s, m, group.id);
+      });
+      return group;
+    },
+    group_update: ({ id, name }) =>
+      mutate((s) => {
+        const g = s.groups.find((x) => x.id === id);
+        if (!g) throw new Error("Group not found.");
+        g.name = name;
+      }),
+    group_delete: ({ id }) =>
+      mutate((s) => {
+        const sid = `group:${id}`;
+        if (!s.groups.some((g) => g.id === id)) throw new Error("Group not found.");
+        // Its contents move up one level, keeping their place in the order.
+        const up = s.within[sid];
+        for (const [k, v] of Object.entries(s.within)) {
+          if (v !== id) continue;
+          if (up) s.within[k] = up;
+          else delete s.within[k];
+        }
+        delete s.within[sid];
+        s.groups = s.groups.filter((g) => g.id !== id);
+        s.order = s.order.filter((x) => x !== sid);
+        s.collapsed = s.collapsed.filter((x) => x !== sid);
+      }),
+    group_place: ({ ids: members, groupId, order }) =>
+      mutate((s) => {
+        if (groupId && !s.groups.some((g) => g.id === groupId)) throw new Error("Group not found.");
+        for (const m of members) placeIn(s, m, groupId);
+        if (order) s.order = order;
+      }),
+    pool_list: () => poolList(),
+    pool_put_first: async ({ accountId }) => {
+      const res = await poolPutFirst(accountId);
+      bb.log.info(`pool failover order set: ${res.accounts.map((a) => `${a.short}=${a.priority}`).join(", ")}`);
+      bb.realtime.publish("pool-order", { at: Date.now() });
+      return res;
+    },
     pool_account: ({ provider, sessionId }) => {
       const conn = open();
       if (!conn) return { accountId: null, activeAccountId: null };

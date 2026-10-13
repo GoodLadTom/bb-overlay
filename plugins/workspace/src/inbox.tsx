@@ -2,7 +2,7 @@
 // the member's Gmail accounts, triaged by Jev on the server. "Hand to agent" starts a
 // real bb chat that drafts a reply as the emailer agent. Drafts only, never sends.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useWorkProject } from "./spawn";
+import { fullAccess, useWorkProject } from "./spawn";
 import { experimental_useSidebarThreads as useSidebarThreads, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -70,14 +70,16 @@ export function InboxCard() {
     setBusy(m.id);
     const prompt = replyPrompt(m);
     try {
-      const made = await sdk.threads.spawn({
-        projectId: project.id,
-        environment: { type: "project-default" },
-        providerId: "claude-code",
-        title: `Reply: ${m.subject}`.slice(0, 80),
-        visibility: "visible",
-        prompt,
-      } as Parameters<typeof sdk.threads.spawn>[0]);
+      const made = await sdk.threads.spawn(
+        fullAccess({
+          projectId: project.id,
+          environment: { type: "project-default" },
+          providerId: "claude-code",
+          title: `Reply: ${m.subject}`.slice(0, 80),
+          visibility: "visible",
+          prompt,
+        }) as Parameters<typeof sdk.threads.spawn>[0],
+      );
       nav.toThread((made as { id: string }).id);
     } catch (e) {
       toast.error("Could not start the chat", { description: e instanceof Error ? e.message : String(e) });

@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import type { rpcContract } from "../server";
 import { Boundary } from "./boundary";
 import { GOLD, Node, ago, caps, harnessOf, stateOf, tnum, type State } from "./shared";
+import { fullAccess } from "./spawn";
 
 const STATE_LABEL: Record<State, string> = { running: "working", needs: "needs you", unread: "replied", parked: "idle" };
 const STATE_TONE: Record<State, string> = { running: GOLD, needs: "var(--destructive)", unread: "var(--foreground)", parked: "var(--muted-foreground)" };
@@ -270,17 +271,19 @@ function SpinUp({ threadId, root, fleetAgent, clearFleet }: { threadId: string; 
       : ROLES.find((x) => x.key === role);
     setBusy(true);
     try {
-      const made = await sdk.threads.spawn({
-        projectId: root.projectId,
-        environment: envId ? { type: "reuse", environmentId: envId } : { type: "project-default" },
-        ...(own ? {} : { parentThreadId: threadId }),
-        providerId: pick.providerId,
-        ...(pick.model ? { model: pick.model } : {}),
-        ...(pick.reasoningLevel ? { reasoningLevel: pick.reasoningLevel } : {}),
-        title: (title.trim() || `${r?.label ?? "Agent"} · ${text.slice(0, 48)}`).slice(0, 90),
-        visibility: "visible",
-        prompt: (r?.brief ?? "") + text,
-      } as Parameters<typeof sdk.threads.spawn>[0]);
+      const made = await sdk.threads.spawn(
+        fullAccess({
+          projectId: root.projectId,
+          environment: envId ? { type: "reuse", environmentId: envId } : { type: "project-default" },
+          ...(own ? {} : { parentThreadId: threadId }),
+          providerId: pick.providerId,
+          ...(pick.model ? { model: pick.model } : {}),
+          ...(pick.reasoningLevel ? { reasoningLevel: pick.reasoningLevel } : {}),
+          title: (title.trim() || `${r?.label ?? "Agent"} · ${text.slice(0, 48)}`).slice(0, 90),
+          visibility: "visible",
+          prompt: (r?.brief ?? "") + text,
+        }) as Parameters<typeof sdk.threads.spawn>[0],
+      );
       toast.success(`Started ${r?.label ?? "agent"}`, { description: own ? "In its own chat" : (made as { title?: string | null }).title ?? undefined });
       if (own) nav.toThread((made as { id: string }).id);
       setTask("");

@@ -20,11 +20,13 @@ Two bb plugins:
   - **Home:** a greeting, your daily brief, an Ask box that Jev routes to the right harness, today's calendar, mail that needs a reply, social posts, and how much of each subscription you've used.
   - **Inbox:** every email from your Gmail accounts, read-only. "Sort with Jev" puts each one in a pile (Reply today, Clients, Partners, Billing, Community, Newsletters and more). "Hand to agent" starts a chat that drafts the reply but never sends it.
   - **Calendar:** your Google Calendars as a month view, with your booking links.
-  - **The rail:** a run-sheet sidebar with a NOW card, a harness filter, tags, folders, "Come back later", and right-click on everything.
+  - **The rail:** a run-sheet sidebar with a NOW card, a harness filter, tags, folders (and folders inside folders), groups that hold whole projects, guide lines that show what sits inside what, "Come back later", and right-click on everything.
+  - **Tabs:** a strip of the chats you have open, with a hover preview and drag to reorder.
+  - **Chips under the chat box:** hold a message until the chat's sub-agents finish, start or move a chat on your always-on machine, and see which Claude account a chat runs on.
   - **To-do and Board:** to-dos linked to chats, which move on their own as the chats start and finish.
   - **Agents panel:** start any agent from `~/.claude/agents` in one click and watch the whole family of chats.
   - **Talk:** the Savvy voice agent on ElevenLabs. Speak to whichever harness chat you have open.
-  - **Always-on machine:** right-click a chat and choose "Send to my always-on machine" (a home Mac, mini PC or VPS). The chat carries on there, a cloud on the row shows its status, and a panel shows its progress live.
+  - **Always-on machine:** right-click a chat and choose "Send to my always-on machine" (a home Mac, mini PC or VPS). The chat carries on there, a cloud on the row shows its status, and a panel shows its progress live. Add the same machine to bb and you can also start chats on it, or move a chat there and back, without leaving this sidebar.
   - **Home or away (optional):** if your files live on a NAS, new chats start on the share at home and on a local copy when you're away.
   - **The NavAIgate theme**, chat charts and link cards.
 - **Kanban** (`plugins/kanban`): a board where every card is a chat. Agents move their own cards from Backlog to In progress, Review and Done.
@@ -49,7 +51,7 @@ bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin 
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
 ```
 
-Then pick the look in bb: **Settings, Appearance**. Choose the NavAIgate theme, the NavAIgate sidebar header, and the NavAIgate rail as the thread list.
+Then pick the look in bb: **Settings, Appearance**. Choose the NavAIgate theme and the NavAIgate rail as the thread list. (On bb 0.44 and 0.45 there is also a NavAIgate sidebar header; bb 0.46 removed that option.)
 
 Not technical? Follow the step-by-step guide in [INSTALL.md](INSTALL.md).
 
@@ -84,10 +86,44 @@ Any machine that stays on and that you can reach over SSH with a key: a Mac at h
 
 Then right-click any chat and choose **Send to my always-on machine**. The plugin writes a hand-off brief from the conversation, copies over any laptop-only files the chat mentions, and starts the chat there. Your agents can drive it too, through the bundled `always-on` skill: `always-on send`, `list`, `show`, `tell` and `pull`, plus `fetch`, `push` and `put` when you've set up storage at home.
 
+**Run on it from this bb (optional).** In bb, open **Settings, Machines** and add the always-on machine with the same name you gave it in Set up. Two chips then appear under the chat box:
+
+- **Run on** *your machine* on the new-chat screen: the next chat runs on that machine, in the project's folder there, but stays in your sidebar. If the project has no folder there yet, the chip offers to add one at the matching path (your home folder maps to its home folder; storage at home is the same path on both).
+- **Move to** *your machine* in a chat: stops the chat here, pushes the current git branch (uncommitted changes only if you agree, on a separate `teleport/<chat>` branch, so your own branch and files don't move), starts the chat again there from a brief of the conversation, and archives this one so you can restore it. **Bring it back** does the reverse. bb cannot copy a chat between machines, so the new chat starts from the brief, not the full history.
+
+This computer has to stay awake while you do this, because it is the bb server the other machine reports to.
+
 ## Requirements and costs
 
-- bb 0.44 or later, on macOS. The always-on machine can be macOS or Linux.
+- bb 0.44 or later, including bb 0.46, on macOS. The always-on machine can be macOS or Linux. Linux as the main computer is not tested yet, but 1.1.0 removes the macOS-only assumptions we knew about.
 - Your own subscriptions: Claude Code, Codex or Cursor for the harnesses, plus any of the services above you choose to connect. Each one bills you directly.
+
+## Recommended companion plugins
+
+These are made by other people and are not part of BB Overlay. Install them only if you want what they add:
+
+- **Projects & Sections** by VKirill (MIT), for real folders in the rail, including folders inside folders:
+
+  ```sh
+  bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0
+  ```
+
+- bb's built-in **Account Pooler** (no install; add your accounts with `bb pool`), for per-account usage in the dock and the Claude account chip.
+
+Without them the rail, dock and chips still work; folders and pooled accounts simply don't appear.
+
+## What's new in 1.1.0
+
+- Runs on bb 0.46. bb 0.46 removed the sidebar-header slot, which left the whole workspace blank on a fresh install of 1.0.1. The NavAIgate sidebar mark now only appears on bb versions that still have that slot.
+- Set up saves with any number of keys, from none to all five. Before, entering fewer than five keys failed and lost your name and areas too.
+- A tab strip of the chats you have open, with a hover preview (title, state, harness and last activity) and drag to reorder.
+- Guide lines in the rail, folders inside folders, and groups that hold whole projects (and other groups), with drag and drop and right-click.
+- "Send when sub-agents finish": a message waits until the chat's sub-agents are done, then sends itself. It survives a reload.
+- The Claude account chip: which pooled account a chat runs on, the weekly and session use of each, and the failover order.
+- Run on and Move to your always-on machine, when it is also a machine of this bb.
+- Every chat the plugin starts (Home, Inbox, Calendar, Social, Agents) runs in Full access.
+- Background jobs stop at once when the plugin reloads (also in 1.0.1).
+- Linux fixes: the Audience cards find Chrome, Chromium, Brave or Edge on Linux (or the browser named in `NAVAIGATE_BROWSER`), the plugin keeps your own PATH so it can find `bb` and `ssh`, and the storage mount path no longer defaults to a macOS-only `/Volumes/`.
 
 ## Updating
 

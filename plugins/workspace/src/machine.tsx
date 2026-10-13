@@ -25,7 +25,7 @@ export function useMachine() {
 }
 
 /** Where a status lands: working, finished, failed, or not known right now. */
-function tone(status: string): { color: string; label: string; pulse: boolean } {
+export function machineTone(status: string): { color: string; label: string; pulse: boolean } {
   if (["active", "starting", "running", "provisioning", "queued"].includes(status)) return { color: "var(--attention)", label: "working", pulse: true };
   if (status === "idle") return { color: "var(--success)", label: "finished", pulse: false };
   if (["error", "failed"].includes(status)) return { color: "var(--destructive)", label: "stopped with an error", pulse: false };
@@ -46,7 +46,7 @@ const open = (url: string) => window.open(url, "_blank", "noopener");
 /** The cloud on a chat row. Clicking it opens the chat with its "On your machine" panel. */
 export function MachineMark({ item, threadId }: { item: MachineItem; threadId: string }) {
   const nav = useBbNavigate();
-  const t = tone(item.status);
+  const t = machineTone(item.status);
   const onClick = (e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -121,7 +121,7 @@ export function MachineHeaderButton({ threadId }: { threadId: string }) {
   const nav = useBbNavigate();
   const item = state.items[threadId];
   if (!item) return null;
-  const t = tone(item.status);
+  const t = machineTone(item.status);
   return (
     <button
       type="button"
@@ -159,7 +159,7 @@ export function MachinePanel({ threadId }: { threadId: string }) {
       </div>
     );
   }
-  const t = tone(item?.status ?? "unknown");
+  const t = machineTone(item?.status ?? "unknown");
   const send = () => {
     const body = text.trim();
     if (!body) return;

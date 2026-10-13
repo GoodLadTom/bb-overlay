@@ -97,7 +97,11 @@ function scriptPath(): string {
 
 const BB_APP_BIN = "/Applications/bb.app/Contents/MacOS/bb";
 const BB_CLI = "/Applications/bb.app/Contents/Resources/app.asar.unpacked/node_modules/bb-app/host-daemon/dist/bb";
-const BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin";
+// The usual system folders first (a bb started from the Dock has a thin PATH), then the
+// member's own PATH, so tools outside them (bb on Linux, for one) are still found.
+const BASE_PATH = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin", ...(process.env.PATH ?? "").split(":")]
+  .filter((d, i, all) => d && all.indexOf(d) === i)
+  .join(":");
 const MAX_FILE = 50 * 1024 * 1024;
 
 export const machineHandoffInput = z.object({ threadId: z.string().min(1), title: z.string().max(200), providerId: z.string().max(60) });
@@ -114,7 +118,7 @@ function run(cmd: string, args: string[], env: Record<string, string>, timeout: 
 
 const alwaysOn = (args: string[], env: Record<string, string> = {}, timeout = 120_000) => run("/bin/bash", [scriptPath(), ...args], env, timeout);
 
-async function transcript(threadId: string): Promise<string> {
+export async function transcript(threadId: string): Promise<string> {
   const args = ["thread", "log", threadId, "--format", "minimal", "--limit", "30"];
   const out = fs.existsSync(BB_CLI)
     ? await run(fs.existsSync(BB_APP_BIN) ? BB_APP_BIN : process.execPath, [BB_CLI, ...args], { ELECTRON_RUN_AS_NODE: "1" }, 60_000)

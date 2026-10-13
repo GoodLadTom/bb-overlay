@@ -6,7 +6,11 @@ import net from "node:net";
 import { z } from "zod";
 import { profile } from "./server-profile";
 
-const BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin";
+// The usual system folders first (a bb started from the Dock has a thin PATH), then the
+// member's own PATH, so tools outside them (bb on Linux, for one) are still found.
+const BASE_PATH = ["/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin", ...(process.env.PATH ?? "").split(":")]
+  .filter((d, i, all) => d && all.indexOf(d) === i)
+  .join(":");
 
 export const whereSchema = z.object({
   /** false when no storage at home is set up: the chip hides and new work starts in the usual project. */

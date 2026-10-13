@@ -70,12 +70,18 @@ export function MenuItem({
   );
 }
 
-export function MenuSub({ icon, label, children, onOpen }: { icon?: string; label: string; children: ReactNode; onOpen?: () => void }) {
+export function MenuSub({ icon, lead, label, children, onOpen }: { icon?: string; lead?: ReactNode; label: string; children: ReactNode; onOpen?: () => void }) {
   const scope = usePortalScopeProps();
   return (
     <CM.Sub onOpenChange={(open) => (open && onOpen ? onOpen() : undefined)}>
       <CM.SubTrigger className={cn(row, "data-[state=open]:bg-accent")}>
-        {icon ? <Icon name={icon} className="size-4 shrink-0 opacity-70" /> : <span className="size-4 shrink-0" />}
+        {lead ? (
+          <span className="flex size-4 shrink-0 items-center justify-center">{lead}</span>
+        ) : icon ? (
+          <Icon name={icon} className="size-4 shrink-0 opacity-70" />
+        ) : (
+          <span className="size-4 shrink-0" />
+        )}
         <span className="flex-1 truncate">{label}</span>
         <Icon name="ChevronRight" className="size-3.5 opacity-60" />
       </CM.SubTrigger>

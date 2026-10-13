@@ -77,7 +77,8 @@ const btn = "rounded-md border border-border px-3 py-1.5 text-[12.5px] text-fore
 const primary = "rounded-md bg-foreground px-4 py-1.5 text-[12.5px] font-medium text-background disabled:opacity-40";
 
 type Storage = NonNullable<Profile["storage"]>;
-const NEW_STORAGE: Storage = { label: "NAS", path: "/Volumes/", localCopy: "~/Storage_Local", homeCheck: "", homeProject: "", awayProject: "" };
+// The mount path starts empty: there is no default that is right on both macOS (/Volumes/...) and Linux (/mnt/...).
+const NEW_STORAGE: Storage = { label: "NAS", path: "", localCopy: "~/Storage_Local", homeCheck: "", homeProject: "", awayProject: "" };
 
 export function SetupWizard({ onDone }: { onDone?: () => void }) {
   const rpc = useRpc<typeof rpcContract>();
@@ -107,19 +108,36 @@ export function SetupWizard({ onDone }: { onDone?: () => void }) {
   };
 
   const save = async () => {
+    if (draft.storage && !draft.storage.path.trim()) {
+      setStep(3);
+      toast.error("Where is your storage mounted?", { description: "Fill in the mount path, or untick storage at home." });
+      return;
+    }
     setSaving(true);
     try {
-      const entered = Object.fromEntries(Object.entries(keys).filter(([, v]) => v && v.trim())) as Record<KeyName, string>;
-      if (Object.keys(entered).length) setKeySet(await rpc.call("keys_save", entered));
+      // The profile first, so a key that fails to save can never lose the name and areas.
       const areas = draft.areas.filter((a) => a.name.trim());
-      await rpc.call("profile_save", { ...draft, name: draft.name.trim(), areas, onboarded: true });
-      toast.success("Workspace set up", { description: "Change any of it later from Set up in the sidebar." });
-      onDone?.();
+      const storage = draft.storage ? { ...draft.storage, path: draft.storage.path.trim() } : null;
+      await rpc.call("profile_save", { ...draft, name: draft.name.trim(), areas, storage, onboarded: true });
     } catch (e) {
       toast.error("Could not save", { description: e instanceof Error ? e.message : String(e) });
-    } finally {
       setSaving(false);
+      return;
     }
+    // Only the keys that were entered: none, some or all five.
+    const entered = Object.fromEntries(Object.entries(keys).filter(([, v]) => v && v.trim())) as Partial<Record<KeyName, string>>;
+    let keysSaved = true;
+    if (Object.keys(entered).length) {
+      try {
+        setKeySet(await rpc.call("keys_save", entered));
+      } catch (e) {
+        keysSaved = false;
+        toast.error("Workspace set up, but your keys were not saved", { description: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    if (keysSaved) toast.success("Workspace set up", { description: "Change any of it later from Set up in the sidebar." });
+    setSaving(false);
+    onDone?.();
   };
 
   const canNext = step !== 0 || draft.name.trim().length > 0;
@@ -259,6 +277,9 @@ export function SetupWizard({ onDone }: { onDone?: () => void }) {
                   <p className="text-[12px] text-muted-foreground sm:col-span-2">
                     On that machine: install bb, sign in to your harnesses, and run <code>bb connect</code> once so you get a link to watch from anywhere.
                   </p>
+                  <p className="text-[12px] text-muted-foreground sm:col-span-2">
+                    Optional: to start chats on it from this bb and move chats there and back (the "Run on" and move chips under the chat box), also add it in bb under Settings, Machines, with the same name you typed above.
+                  </p>
                 </div>
               ) : null}
 
@@ -275,7 +296,7 @@ export function SetupWizard({ onDone }: { onDone?: () => void }) {
                     {(
                       [
                         ["label", "What you call it", "NAS"],
-                        ["path", "Where it's mounted (same on both machines)", "/Volumes/MyNAS"],
+                        ["path", "Where it's mounted (same on both machines)", "/Volumes/MyNAS or /mnt/nas"],
                         ["localCopy", "Local copies when away", "~/Storage_Local"],
                         ["homeCheck", "Address only reachable at home (host:port)", "192.168.0.10:445"],
                         ["homeProject", "bb project on the share", "My NAS"],
@@ -305,7 +326,7 @@ export function SetupWizard({ onDone }: { onDone?: () => void }) {
                     .join(", ") || "none yet (Home works, the connected cards stay empty)"}
                 </li>
                 <li>Always-on machine: {draft.machine?.sshHost ? `${draft.machine.label} (${draft.machine.sshHost})` : "none"}</li>
-                <li>Storage at home: {draft.storage?.path && draft.storage.path !== "/Volumes/" ? `${draft.storage.label} at ${draft.storage.path}` : "none"}</li>
+                <li>Storage at home: {draft.storage?.path.trim() ? `${draft.storage.label} at ${draft.storage.path}` : "none"}</li>
               </ul>
             </div>
           ) : null}

@@ -4,7 +4,7 @@
 //   Inbox       mail that needs a reply, triaged by Jev (src/inbox.tsx)
 //   Plans       an orb per subscription (Claude, Codex, Cursor) + plan advice
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSpawn, useWorkProject } from "./spawn";
+import { fullAccess, useSpawn, useWorkProject } from "./spawn";
 import { SetupWizard, useGreeting, useProfile } from "./onboarding";
 import {
   experimental_ProviderIcon as BbProviderIcon,
@@ -115,15 +115,17 @@ function Ask() {
     try {
       const levels = rec(harness)?.reasoningLevels?.map((l) => l.id) ?? [];
       const reasoningLevel = route.source === "jev" && route.effort && levels.includes(route.effort) ? route.effort : undefined;
-      const made = await sdk.threads.spawn({
-        projectId: project.id,
-        environment: { type: "project-default" },
-        providerId: PROVIDER[harness],
-        title: prompt.slice(0, 80),
-        visibility: "visible",
-        prompt,
-        ...(reasoningLevel ? { reasoningLevel } : {}),
-      } as Parameters<typeof sdk.threads.spawn>[0]);
+      const made = await sdk.threads.spawn(
+        fullAccess({
+          projectId: project.id,
+          environment: { type: "project-default" },
+          providerId: PROVIDER[harness],
+          title: prompt.slice(0, 80),
+          visibility: "visible",
+          prompt,
+          ...(reasoningLevel ? { reasoningLevel } : {}),
+        }) as Parameters<typeof sdk.threads.spawn>[0],
+      );
       await rpc.call("ask_commit", { decisionId: route.decisionId, harness }).catch(() => {});
       setText("");
       setConfirm(null);

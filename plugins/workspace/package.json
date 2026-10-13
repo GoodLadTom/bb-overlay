@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-navaigate-workspace",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "bb": ">=0.44",
@@ -105,6 +105,10 @@
     "server-profile.ts",
     "server-machine.ts",
     "server-where.ts",
+    "server-pool.ts",
+    "server-machines.ts",
+    "server-teleport.ts",
+    "server-hold.ts",
     "LICENSE",
     "NOTICE"
   ],
