@@ -58,10 +58,12 @@ Safe to run again: it updates what's already there within its own pin, never rem
 ```sh
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin workspace
 bb plugin install git:https://github.com/skyremote/bb-overlay.git@main --plugin kanban
-bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@semver:^0.6.0
+bb plugin install git:https://github.com/VKirill/bb-plugin-project-folders.git@v0.6.19
 bb plugin install git:https://github.com/aaronphifer/bb-plugin-agent-board.git@semver:^0.6.1
 bb plugin install tasks
 ```
+
+Projects & Sections is pinned to 0.6.19, the last release that runs on standard bb. Later releases need VKirill's own build of bb.
 
 Then pick the look in bb: **Settings, Appearance**. Choose the NavAIgate theme and the NavAIgate rail as the thread list. (On bb 0.44 and 0.45 there is also a NavAIgate sidebar header; bb 0.46 removed that option.)
 
@@ -123,8 +125,10 @@ It also uses two plugins built into bb: **Tasks** (To-do and the Board; bb ships
 
 If a companion is missing, the rest still works. Its feature shows greyed out with the line that installs it, for example "Move to folder" says "Install project-folders to use folders", and the last step of Set up lists every companion as installed or missing, with a Copy button for its install line.
 
-## What's new in 1.2.1
+## What's new in 1.2.2
 
+- Folders install on standard bb. From 0.6.20 on, Projects & Sections needs VKirill's own build of bb, so the old `^0.6.0` line found nothing it could install. The installer now installs 0.6.19, the last release that runs on standard bb, pinned, and never updates a copy you already have; the install line behind the greyed-out "Move to folder" and the Set up check is pinned to it.
+- The installer now updates a workspace and Kanban you installed from the other NavAIgate edition (BB Overlay or the members' edition). Before, it kept them on their old version.
 - Set up now has a Companions check on its last step: Projects & Sections, Agent Board, Kanban and Tasks, each shown as installed, turned off or missing, with the line that installs it and a Copy button, plus the one command that installs everything.
 
 ## What's new in 1.2.0
