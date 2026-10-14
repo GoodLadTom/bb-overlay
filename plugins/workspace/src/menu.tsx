@@ -108,13 +108,20 @@ export function MenuSeparator() {
 /* ---------------- Click-to-open dropdown (same look, same rows) ---------------- */
 
 
-export function Dropdown({ trigger, children, align = "start", side = "top" }: { trigger: ReactNode; children: ReactNode; align?: "start" | "center" | "end"; side?: "top" | "bottom" | "right" }) {
+export function Dropdown({ trigger, children, align = "start", side = "top", onCloseAutoFocus }: {
+  trigger: ReactNode;
+  children: ReactNode;
+  align?: "start" | "center" | "end";
+  side?: "top" | "bottom" | "right";
+  /** Call event.preventDefault() to keep focus where an item moved it (an inline input, say). */
+  onCloseAutoFocus?: (event: Event) => void;
+}) {
   const scope = usePortalScopeProps();
   return (
     <DM.Root modal={false}>
       <DM.Trigger asChild>{trigger}</DM.Trigger>
       <DM.Portal>
-        <DM.Content {...scope} className={panel} align={align} side={side} sideOffset={6} collisionPadding={8}>
+        <DM.Content {...scope} className={cn(panel, "max-h-[70vh] overflow-y-auto")} align={align} side={side} sideOffset={6} collisionPadding={8} onCloseAutoFocus={onCloseAutoFocus}>
           {children}
         </DM.Content>
       </DM.Portal>
@@ -122,18 +129,19 @@ export function Dropdown({ trigger, children, align = "start", side = "top" }: {
   );
 }
 
-export function DropItem({ icon, label, hint, danger, checked, onSelect, swatch, lead }: {
+export function DropItem({ icon, label, hint, danger, disabled, checked, onSelect, swatch, lead }: {
   lead?: ReactNode;
   icon?: string;
   label: string;
   hint?: string;
   danger?: boolean;
+  disabled?: boolean;
   checked?: boolean;
   swatch?: string;
   onSelect: () => void;
 }) {
   return (
-    <DM.Item className={cn(row, danger && "text-destructive")} onSelect={onSelect}>
+    <DM.Item className={cn(row, danger && "text-destructive")} disabled={disabled} onSelect={onSelect}>
       {lead ? (
         <span className="flex size-4 shrink-0 items-center justify-center">{lead}</span>
       ) : swatch ? (
@@ -155,4 +163,59 @@ export function DropSeparator() {
 
 export function DropLabel({ children }: { children: ReactNode }) {
   return <DM.Label className="px-3 pb-1 pt-2 text-[10.5px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{children}</DM.Label>;
+}
+
+/** A checkbox row that stays open on select, for picking several at once. */
+export function DropCheck({ label, hint, swatch, checked, onCheckedChange }: {
+  label: string;
+  hint?: string;
+  swatch?: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <DM.CheckboxItem
+      className={row}
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      onSelect={(e) => e.preventDefault()}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
+          checked ? "border-[var(--attention)] bg-[var(--attention)] text-neutral-900" : "border-border",
+        )}
+      >
+        {checked ? <Icon name="Check" className="size-3" /> : null}
+      </span>
+      {swatch ? <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-[3px]" style={{ background: swatch }} /> : null}
+      <span className="flex-1 truncate">{label}</span>
+      {hint ? <span className="text-[11px] text-muted-foreground" style={{ fontVariantNumeric: "tabular-nums" }}>{hint}</span> : null}
+    </DM.CheckboxItem>
+  );
+}
+
+export function DropSub({ icon, swatch, label, children }: { icon?: string; swatch?: string; label: string; children: ReactNode }) {
+  const scope = usePortalScopeProps();
+  return (
+    <DM.Sub>
+      <DM.SubTrigger className={cn(row, "data-[state=open]:bg-accent")}>
+        {swatch ? (
+          <span aria-hidden className="mx-[3px] inline-block size-2.5 shrink-0 rounded-[3px]" style={{ background: swatch }} />
+        ) : icon ? (
+          <Icon name={icon} className="size-4 shrink-0 opacity-70" />
+        ) : (
+          <span className="size-4 shrink-0" />
+        )}
+        <span className="flex-1 truncate">{label}</span>
+        <Icon name="ChevronRight" className="size-3.5 opacity-60" />
+      </DM.SubTrigger>
+      <DM.Portal>
+        <DM.SubContent {...scope} className={cn(panel, "max-h-[60vh] overflow-y-auto")} sideOffset={6} collisionPadding={8}>
+          {children}
+        </DM.SubContent>
+      </DM.Portal>
+    </DM.Sub>
+  );
 }

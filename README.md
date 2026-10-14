@@ -22,7 +22,7 @@ Two bb plugins:
   - **Home:** a greeting, your daily brief, an Ask box that Jev routes to the right harness, today's calendar, mail that needs a reply, social posts, and how much of each subscription you've used.
   - **Inbox:** every email from your Gmail accounts, read-only. "Sort with Jev" puts each one in a pile (Reply today, Clients, Partners, Billing, Community, Newsletters and more). "Hand to agent" starts a chat that drafts the reply but never sends it.
   - **Calendar:** your Google Calendars as a month view, with your booking links.
-  - **The rail:** a run-sheet sidebar with a NOW card, a harness filter, tags, folders (and folders inside folders), groups that hold whole projects, guide lines that show what sits inside what, "Come back later", and right-click on everything.
+  - **The rail:** a run-sheet sidebar with a NOW card, a harness filter, a Tags dropdown, folders (and folders inside folders), groups that hold whole projects, guide lines that show what sits inside what, "Come back later", and right-click on everything. bb's navigation sits under a Navigate row that folds to one line (⌘⇧B) or hides.
   - **Tabs:** a strip of the chats you have open, with a hover preview and drag to reorder.
   - **Chips under the chat box:** hold a message until the chat's sub-agents finish, start or move a chat on your always-on machine, and see which Claude account a chat runs on.
   - **To-do and Board:** to-dos linked to chats, which move on their own as the chats start and finish.
@@ -124,6 +124,12 @@ The installer adds two plugins made by other people. They are not part of BB Ove
 It also uses two plugins built into bb: **Tasks** (To-do and the Board; bb ships it but it's opt-in, so the installer adds it) and, if you use it, **Account Pooler** (per-account usage in the dock and the Claude account chip; add your accounts with `bb pool`).
 
 If a companion is missing, the rest still works. Its feature shows greyed out with the line that installs it, for example "Move to folder" says "Install project-folders to use folders", and the last step of Set up lists every companion as installed or missing, with a Copy button for its install line.
+
+## What's new in 1.3.0
+
+- The top of the sidebar takes far less room. bb's navigation (New thread, Search threads, Board, Automations, plugin pages, More) now sits under a **Navigate** row: click it, or press **⌘⇧B**, to fold the list to that one line, and the NOW card, filters and sections move up. It remembers your choice. Right-click the row for **Hide navigation entirely**, and right-click the rail for **Show navigation** to bring it back. The rows are still bb's own, so clicks, the "…" menus, More and reordering work as before.
+- Tags are one **Tags** button beside Select, showing "Tags · 2" while a filter is on. It opens a dropdown with every tag, its colour and how many chats carry it. Tick several to see chats with any of them; **Clear**, **New tag…** and **Manage tags** (rename, recolour, delete) are in the same menu. While a filter is on, the active tags show as small chips you can remove.
+- The harness filter (All, Claude, Codex, Cursor) is one compact row, with the active one in gold.
 
 ## What's new in 1.2.3
 

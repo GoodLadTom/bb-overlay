@@ -6,6 +6,7 @@
 //   Usage dock    experimental_appOverlay   context + plan limits under the chat box
 //   Chips         experimental_appOverlay   hold for sub-agents, Run on / Move to your always-on machine, Claude account, under the chat box
 //   Tabs          experimental_appOverlay   Chrome-style strip of open chats; dock via bb's split
+//   Navigate      experimental_sidebarNavigation  bb's nav rows under a row that folds or hides them
 //
 // Styling follows the GPLS Slate system (NavAIgate-2.0 src/styles/gpls-*.css).
 // Colours come only from host tokens; the bundled NavAIgate theme drives them.
@@ -31,6 +32,7 @@ import { HeaderMark } from "./src/header-mark";
 import { toggleMode } from "./src/mode-toggle";
 import { TodoBoard, TodoHeaderButton, TodoPanel } from "./src/todo";
 import { VoiceEngine, VoiceHeaderButton, VoicePanel, voice } from "./src/voice";
+import { FoldableNavigation, toggleNav } from "./src/nav-fold";
 
 const goTo = (path: string) => {
   window.history.pushState({}, "", path);
@@ -160,6 +162,27 @@ export default definePluginApp((app) => {
   if (typeof slots.experimental_sidebarHeader === "function") {
     try {
       app.slots.experimental_sidebarHeader({ id: "navaigate-header", title: "NavAIgate", description: "The NavAIgate orb and name at the top of the sidebar.", component: HeaderMark });
+    } catch {
+      /* slot gone in this bb version */
+    }
+  }
+  // Navigation you can fold: bb's own rows under a "Navigate" row that folds them
+  // to one line (or hides them), so the rail moves up. Guarded like the header:
+  // register only where the slot exists.
+  if (typeof slots.experimental_sidebarNavigation === "function") {
+    try {
+      app.slots.experimental_sidebarNavigation({
+        id: "foldable-navigation",
+        title: "NavAIgate navigation",
+        description: "bb's navigation under a Navigate row you can fold to one line or hide.",
+        component: FoldableNavigation,
+      });
+      app.commands.register({
+        id: "toggle-navigation",
+        title: "Workspace: toggle navigation",
+        defaultShortcut: { key: "b", mod: true, shift: true },
+        run: () => toggleNav(),
+      });
     } catch {
       /* slot gone in this bb version */
     }

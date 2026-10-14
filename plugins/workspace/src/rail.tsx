@@ -27,7 +27,8 @@ import { PROJECT_FOLDERS_INSTALL, folderOfThread, goTo, newChatInFolderUrl, slug
 import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./menu";
 import { TAG_CSS, useRailState, type LaterReason, type RailOps, type Tag } from "./rail-state";
 import { LATER_LABEL, StatusMark } from "./status-mark";
-import { TagFilter, TagSwatches } from "./tags";
+import { TagChips, TagEditor, TagFilter, TagSwatches, type TagEdit } from "./tags";
+import { NAV_SHORTCUT, setNavMode, useNavMode } from "./nav-fold";
 import { BulkBar } from "./bulk-bar";
 import { TodoBadge, useFolderTodoCounts } from "./todo";
 import { CloudGlyph, MachineMark, useMachine, useMachineActions, type MachineItem } from "./machine";
@@ -63,6 +64,17 @@ function usePersisted<T>(key: string, initial: T) {
     }
   }, [key, value]);
   return [value, setValue] as const;
+}
+
+/** The single-tag filter from before 0.27 ("nav-skin:tag"), as the start of the multi-tag one. */
+function readOldTagFilter(): string[] {
+  try {
+    const raw = window.localStorage.getItem("nav-skin:tag");
+    const v = raw ? (JSON.parse(raw) as unknown) : null;
+    return typeof v === "string" ? [v] : [];
+  } catch {
+    return [];
+  }
 }
 
 const report = (verb: string) => (e: unknown) => toast.error(`${verb} failed`, { description: e instanceof Error ? e.message : String(e) });
@@ -502,12 +514,25 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
   const folders = useFolders(threads.length);
   const ops = useRailState();
   const todoCounts = useFolderTodoCounts();
-  const [tagFilter, setTagFilter] = usePersisted<string | null>("nav-skin:tag", null);
+  // Several tags at once now; the old single-tag key seeds it once.
+  const [tagFilter, setTagFilter] = usePersisted<string[]>("nav-skin:tags", readOldTagFilter());
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const anchor = useRef<string | null>(null);
   const orderRef = useRef<string[]>([]);
-  const [creatingTag, setCreatingTag] = useState<string[] | null>(null);
+  const [tagEdit, setTagEditState] = useState<TagEdit>(null);
+  // Chats a new tag goes onto once it is made (from a row's or the bulk bar's New tag…).
+  const tagTargets = useRef<string[]>([]);
+  // The dropdown's own New tag… goes onto no chats; only newTagFor sets targets.
+  const setTagEdit = useCallback((e: TagEdit) => {
+    if (e?.kind === "new") tagTargets.current = [];
+    setTagEditState(e);
+  }, []);
+  const newTagFor = useCallback((ids: string[]) => {
+    tagTargets.current = ids;
+    setTagEditState({ kind: "new" });
+  }, []);
+  const navMode = useNavMode();
   // Which section heading is being dragged, so open groups can offer a "take it out" strip.
   const [draggingSection, setDraggingSection] = useState<string | null>(null);
   useEffect(() => {
@@ -527,10 +552,11 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
   }, []);
   const now = Date.now();
 
-  const activeTag = tagFilter && ops.state.tags.some((t) => t.id === tagFilter) ? tagFilter : null;
+  const tagKey = ops.state.tags.filter((t) => tagFilter.includes(t.id)).map((t) => t.id).join(",");
+  const activeTags = useMemo(() => (tagKey ? tagKey.split(",") : []), [tagKey]);
   const model = useMemo(
-    () => buildModel(threads, projects, folders.available ? folders.data : null, harness, activeProjectId, ops.state, activeTag),
-    [threads, projects, folders.available, folders.data, harness, activeProjectId, ops.state, activeTag],
+    () => buildModel(threads, projects, folders.available ? folders.data : null, harness, activeProjectId, ops.state, activeTags),
+    [threads, projects, folders.available, folders.data, harness, activeProjectId, ops.state, activeTags],
   );
 
   const clearSelection = useCallback(() => {
@@ -575,7 +601,7 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
     [selecting, selected.size],
   );
   const machine = useMachine();
-  const rowCtx: RowCtx = { ops, machine: machine.items, hasMachine: machine.configured, selecting, selected, onSelectGesture, onNewTag: (ids) => setCreatingTag(ids) };
+  const rowCtx: RowCtx = { ops, machine: machine.items, hasMachine: machine.configured, selecting, selected, onSelectGesture, onNewTag: newTagFor };
   const renderOrder: string[] = [];
 
   const loadDirs = useCallback(
@@ -1096,36 +1122,31 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
       trigger={
         <div className="min-h-full px-2 pb-6 pt-2">
           <NowCard running={model.running} needs={model.allNeeds} onNavigate={onNavigate} />
-          <HarnessFilter
-            counts={model.counts}
-            value={harness}
-            onChange={setHarness}
-            extra={
-              <button
-                type="button"
-                aria-pressed={selecting}
-                title="Select several chats (or ⌘-click, ⇧-click)"
-                onClick={() => (selecting ? clearSelection() : setSelecting(true))}
-                className={cn(
-                  "ml-auto inline-flex h-7 items-center gap-1.5 rounded-full px-2 text-[12px] transition-colors",
-                  selecting ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon name="ListTodo" className="size-3.5" />
-                {selecting ? "Done" : "Select"}
-              </button>
-            }
-          />
-          <TagFilter
+          <HarnessFilter counts={model.counts} value={harness} onChange={setHarness} />
+          <div className="mx-1 mb-3 flex min-w-0 items-center gap-1.5">
+            <TagFilter ops={ops} counts={model.tagCounts} value={activeTags} onChange={setTagFilter} setEdit={setTagEdit} />
+            <button
+              type="button"
+              aria-pressed={selecting}
+              title="Select several chats (or ⌘-click, ⇧-click)"
+              onClick={() => (selecting ? clearSelection() : setSelecting(true))}
+              className={cn(
+                "ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2 text-[12px] transition-colors",
+                selecting ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon name="ListTodo" className="size-3.5" />
+              {selecting ? "Done" : "Select"}
+            </button>
+          </div>
+          <TagChips ops={ops} value={activeTags} onChange={setTagFilter} setEdit={setTagEdit} />
+          <TagEditor
             ops={ops}
-            counts={model.tagCounts}
-            value={activeTag}
-            onChange={setTagFilter}
-            creating={creatingTag !== null}
-            setCreating={(v) => setCreatingTag(v ? [] : null)}
+            edit={tagEdit}
+            setEdit={setTagEdit}
             onCreated={(tag) => {
-              if (creatingTag && creatingTag.length > 0) void ops.applyTag(creatingTag, tag.id, true);
-              setCreatingTag(null);
+              if (tagTargets.current.length > 0) void ops.applyTag(tagTargets.current, tag.id, true);
+              tagTargets.current = [];
             }}
           />
 
@@ -1158,13 +1179,19 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
               pinnedAll={selectedThreads.length > 0 && selectedThreads.every((t) => t.isPinned)}
               ops={ops}
               onClear={clearSelection}
-              onNewTag={() => setCreatingTag([...selected])}
+              onNewTag={() => newTagFor([...selected])}
             />
           ) : null}
         </div>
       }
     >
       <MenuItem lead={<GroupGlyph />} label="New group" hint="holds projects" onSelect={() => setDraft({ kind: "group-new", parentId: null, members: [] })} />
+      {navMode === "hidden" ? (
+        <>
+          <MenuSeparator />
+          <MenuItem icon="Eye" label="Show navigation" hint={NAV_SHORTCUT} onSelect={() => setNavMode("open")} />
+        </>
+      ) : null}
     </Menu>
   );
 }
@@ -1297,7 +1324,7 @@ function buildModel(
   harness: string | null,
   activeProjectId: string | null,
   rail: { later: Record<string, { reason: string; at: number }>; assign: Record<string, string[]> },
-  tagFilter: string | null,
+  tagFilter: readonly string[],
 ) {
   const live = threads.filter((t) => !t.isHidden && !t.isArchived);
   const ids = new Set(live.map((t) => t.id));
@@ -1322,7 +1349,7 @@ function buildModel(
   const tagCounts = new Map<string, number>();
   for (const t of roots) for (const id of rail.assign[t.id] ?? []) tagCounts.set(id, (tagCounts.get(id) ?? 0) + 1);
   const match = (t: PluginSidebarThread) =>
-    (harness === null || harnessOf(t.providerId).key === harness) && (tagFilter === null || (rail.assign[t.id] ?? []).includes(tagFilter));
+    (harness === null || harnessOf(t.providerId).key === harness) && (tagFilter.length === 0 || (rail.assign[t.id] ?? []).some((id) => tagFilter.includes(id)));
   const shown = roots.filter(match);
   const isLater = (t: PluginSidebarThread) => rail.later[t.id] !== undefined;
   const running = live.filter((t) => stateOf(t) === "running" && match(t)).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1474,7 +1501,8 @@ function NowCard({ running, needs, onNavigate }: { running: PluginSidebarThread[
   );
 }
 
-function HarnessFilter({ counts, value, onChange, extra }: { counts: Array<[Harness, number]>; value: string | null; onChange: (key: string | null) => void; extra?: ReactNode }) {
+/** All · Claude · Codex · Cursor as one segmented row that never wraps; the active segment is gold. */
+function HarnessFilter({ counts, value, onChange }: { counts: Array<[Harness, number]>; value: string | null; onChange: (key: string | null) => void }) {
   const item = (key: string | null, label: string, n: number) => {
     const on = value === key;
     return (
@@ -1482,23 +1510,23 @@ function HarnessFilter({ counts, value, onChange, extra }: { counts: Array<[Harn
         key={key ?? "all"}
         type="button"
         aria-pressed={on}
+        title={`${label}: ${n}`}
         onClick={() => onChange(key)}
         className={cn(
-          "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] transition-colors",
-          on ? "border-foreground bg-foreground text-background" : "border-border text-muted-foreground hover:text-foreground",
+          "inline-flex h-6 min-w-0 flex-auto items-center justify-center gap-1 rounded-full px-1.5 text-[12px] transition-colors",
+          on ? "bg-[var(--attention)] font-medium text-neutral-900" : "text-muted-foreground hover:text-foreground",
         )}
       >
-        {label}
-        <span className="opacity-60" style={tnum}>{n}</span>
+        <span className="min-w-0 truncate">{label}</span>
+        <span className={cn("shrink-0", on ? "opacity-70" : "opacity-60")} style={tnum}>{n}</span>
       </button>
     );
   };
   const total = counts.reduce((s, [, n]) => s + n, 0);
   return (
-    <div className="mx-1 mb-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by harness">
+    <div className="mx-1 mb-2 flex h-7 min-w-0 flex-nowrap items-center gap-0.5 rounded-full border border-border p-0.5" role="group" aria-label="Filter by harness">
       {item(null, "All", total)}
       {counts.map(([h, n]) => item(h.key, h.label, n))}
-      {extra}
     </div>
   );
 }
