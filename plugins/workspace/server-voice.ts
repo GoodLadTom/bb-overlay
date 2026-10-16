@@ -137,6 +137,12 @@ export function createVoice(bb: BbPluginApi) {
       description: "Chats and projects stay where you put them instead of re-sorting by activity. Drag a chat or a folder to reorder it. A chat waiting on you stays in its place instead of moving to Needs you, and a new chat joins the top of its list.",
       default: false,
     },
+    rowHighlights: {
+      type: "boolean",
+      label: "Highlight chats that need a look",
+      description: "Mark rows in the rail: green tick for a chat that finished since you last opened it, blue question mark for one waiting on your answer, red for one that failed. Each gets a tinted row, a coloured edge and a bold title until you open it.",
+      default: false,
+    },
   });
 
   async function key(): Promise<string | null> {

@@ -28,11 +28,11 @@ import { useBbNavigate, useSettings } from "@get-bb/plugin-sdk/app";
 import { LogoOrb } from "./orb";
 import { useVoiceState } from "./voice";
 import { cn } from "@/lib/utils";
-import { GOLD, GOLD_INK, Lattice, Node, ago, byNewest, byPlace, byUrgencyThenRecent, caps, harnessOf, stateOf, tnum, type Harness } from "./shared";
+import { GOLD, GOLD_INK, Lattice, Node, ago, asksYou, byNewest, byPlace, byUrgencyThenRecent, caps, harnessOf, stateOf, tnum, type Harness } from "./shared";
 import { PROJECT_FOLDERS_INSTALL, folderOfThread, goTo, newChatInFolderUrl, slug, useFolders, type Directory, type Folder, type FolderData } from "./folders";
 import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from "./menu";
 import { TAG_CSS, useRailState, type LaterReason, type RailOps, type Tag } from "./rail-state";
-import { LATER_LABEL, StatusMark } from "./status-mark";
+import { ASK, AskMark, FinishedMark, LATER_LABEL, StatusMark } from "./status-mark";
 import { TagChips, TagEditor, TagFilter, TagSwatches, type TagEdit } from "./tags";
 import { NAV_SHORTCUT, setNavMode, useNavMode } from "./nav-fold";
 import { BulkBar } from "./bulk-bar";
@@ -221,6 +221,8 @@ type RowCtx = {
   canPlace: (dragged: DragChat, target: PluginSidebarThread, list: string) => boolean;
   /** Keep my order: put the dragged chat above (or below) this row, moving it to this row's folder if it came from another. */
   onPlace: (dragged: DragChat, target: PluginSidebarThread, list: string, after: boolean) => void;
+  /** Row highlights setting: tint and mark finished, asking and failed rows. */
+  highlights: boolean;
 };
 
 /** Copy the project-folders install line, for the greyed-out folder actions. */
@@ -285,6 +287,14 @@ function ThreadRow({ thread, list, active, depth, now, onNavigate, moveTargets, 
     return e.clientY - r.top < r.height / 2 ? ("before" as const) : ("after" as const);
   };
 
+  // Row highlights: a finished chat (its agent stopped since you last opened
+  // it), one asking you a question, or one that failed is marked in place:
+  // tinted row, coloured edge, bold title. Green finished, blue asking, red failed.
+  const finished = ctx.highlights && state === "unread" && !active;
+  const asking = ctx.highlights && asksYou(thread) && !active;
+  const failed = ctx.highlights && state === "needs" && !active && !asking;
+  const flag = finished ? "var(--success)" : asking ? ASK : failed ? "var(--destructive)" : null;
+
   const anchor = (
     <a
       href={thread.href}
@@ -321,17 +331,22 @@ function ThreadRow({ thread, list, active, depth, now, onNavigate, moveTargets, 
       data-sidebar-thread-shortcut-target=""
       data-sidebar-thread-id={thread.id}
       aria-current={active ? "page" : undefined}
-      aria-label={`${thread.displayTitle}, ${h.label}${thread.indicatorLabel ? `, ${thread.indicatorLabel}` : ""}`}
+      aria-label={`${thread.displayTitle}, ${h.label}${finished ? ", finished, not opened yet" : asking ? ", waiting for your answer" : ""}${thread.indicatorLabel ? `, ${thread.indicatorLabel}` : ""}`}
       title={thread.displayTitle}
       className={cn(
         "group relative flex h-[34px] items-center gap-2.5 rounded-md pr-2 text-[13.5px] no-underline outline-none transition-colors",
         "hover:bg-[var(--state-hover)] focus-visible:ring-1 focus-visible:ring-ring data-[state=open]:bg-accent",
         active ? "bg-accent font-semibold text-foreground" : state === "parked" && !later ? "text-muted-foreground" : "text-foreground",
+        flag && "font-semibold",
         isSelected && "bg-[var(--surface-selected)] ring-1 ring-inset ring-[var(--surface-selected-border)]",
       )}
-      style={{ paddingLeft: 10 + depth * 16 }}
+      // isolate: the highlight tint sits above the row's own hover colour but under its text.
+      style={{ paddingLeft: 10 + depth * 16, isolation: "isolate" }}
     >
-      {active ? <span aria-hidden className="absolute inset-y-2 left-0 w-[2px]" style={{ background: GOLD }} /> : null}
+      {flag && !isSelected ? (
+        <span aria-hidden className="pointer-events-none absolute inset-0 rounded-md" style={{ zIndex: -1, background: `color-mix(in srgb, ${flag} 11%, transparent)` }} />
+      ) : null}
+      {active ? <span aria-hidden className="absolute inset-y-2 left-0 w-[2px]" style={{ background: GOLD }} /> : flag ? <span aria-hidden className="absolute rounded-full" style={{ left: 0, top: 6, bottom: 6, width: 3, background: flag }} /> : null}
       {dropAt ? (
         <span aria-hidden className="pointer-events-none absolute rounded-full" style={{ left: 4, right: 4, height: 2, background: GOLD, zIndex: 1, ...(dropAt === "before" ? { top: -1 } : { bottom: -1 }) }} />
       ) : null}
@@ -339,8 +354,12 @@ function ThreadRow({ thread, list, active, depth, now, onNavigate, moveTargets, 
         <span aria-hidden className={cn("inline-flex size-[13px] shrink-0 items-center justify-center rounded-[3px] border", isSelected ? "border-foreground bg-foreground text-background" : "border-input bg-background")}>
           {isSelected ? <Icon name="Check" className="size-2.5" /> : null}
         </span>
+      ) : asking ? (
+        <span className="inline-flex w-[11px] shrink-0 items-center justify-center"><AskMark size={14} /></span>
       ) : later && state !== "running" ? (
         <span className="inline-flex w-[11px] shrink-0 items-center justify-center"><StatusMark reason={later} size={13} /></span>
+      ) : finished ? (
+        <span className="inline-flex w-[11px] shrink-0 items-center justify-center"><FinishedMark size={14} /></span>
       ) : (
         <Node state={state} />
       )}
@@ -608,6 +627,7 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
   const activeTags = useMemo(() => (tagKey ? tagKey.split(",") : []), [tagKey]);
   const { values: settings } = useSettings();
   const keepOrder = settings?.keepOrder === true;
+  const highlights = settings?.rowHighlights === true;
   const place = ops.state.threadOrder ?? [];
   const model = useMemo(
     () => buildModel(threads, projects, folders.available ? folders.data : null, harness, activeProjectId, ops.state, activeTags, keepOrder),
@@ -689,7 +709,7 @@ export function Rail({ activeThreadId, activeProjectId, onNavigate }: PluginThre
     order.splice(after ? at + 1 : at, 0, dragged.id);
     void ops.setThreadOrder(order);
   };
-  const rowCtx: RowCtx = { ops, machine: machine.items, hasMachine: machine.configured, selecting, selected, onSelectGesture, onNewTag: newTagFor, canPlace, onPlace };
+  const rowCtx: RowCtx = { ops, machine: machine.items, hasMachine: machine.configured, selecting, selected, onSelectGesture, onNewTag: newTagFor, canPlace, onPlace, highlights };
   const renderOrder: string[] = [];
 
   const loadDirs = useCallback(
