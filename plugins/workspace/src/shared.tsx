@@ -49,6 +49,25 @@ export const RANK: Record<State, number> = { running: 0, needs: 1, unread: 2, pa
 export const byUrgencyThenRecent = (a: PluginSidebarThread, b: PluginSidebarThread) =>
   RANK[stateOf(a)] - RANK[stateOf(b)] || b.updatedAt - a.updatedAt;
 
+const createdOf = (t: PluginSidebarThread) => (t as { createdAt?: number }).createdAt ?? 0;
+
+/** Keep my order: a chat keeps the place it was given, whatever it is doing.
+ *  Chats not placed yet sit above the placed ones, newest first. */
+export function byPlace(order: readonly string[]) {
+  const at = new Map(order.map((id, i) => [id, i]));
+  return (a: PluginSidebarThread, b: PluginSidebarThread) => {
+    const ia = at.get(a.id);
+    const ib = at.get(b.id);
+    if (ia !== undefined && ib !== undefined) return ia - ib;
+    if (ia !== undefined) return 1;
+    if (ib !== undefined) return -1;
+    return createdOf(b) - createdOf(a);
+  };
+}
+
+/** Newest first by creation time, which never changes once a chat exists. */
+export const byNewest = (a: PluginSidebarThread, b: PluginSidebarThread) => createdOf(b) - createdOf(a);
+
 export function ago(ms: number, now: number): string {
   const s = Math.max(0, Math.round((now - ms) / 1000));
   if (s < 60) return "now";
